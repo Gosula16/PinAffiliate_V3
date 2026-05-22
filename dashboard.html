@@ -462,10 +462,17 @@ const SAMPLE_PRODUCTS = [
     board_suggested:"Creator Gadgets India", fetched_at: new Date().toISOString() },
 ];
 
-let products = store.get('pinbot_products') || SAMPLE_PRODUCTS;
+let products = store.get('pinbot_products') || [];
 let postedLog = store.get('pinbot_log') || [];
 let statsData = store.get('pinbot_stats') || {};
-let dashboardSource = store.get('pinbot_source') || 'sample data';
+let dashboardSource = store.get('pinbot_source') || 'no CSV loaded';
+
+if (dashboardSource === 'sample data' || products.some(p => String(p.asin || '').includes('XYZ'))) {
+  products = [];
+  dashboardSource = 'no CSV loaded';
+  store.set('pinbot_products', products);
+  store.set('pinbot_source', dashboardSource);
+}
 
 function esc(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => ({
@@ -774,9 +781,9 @@ function runPipeline(mode) {
         if (!statsData[today]) statsData[today]={pins_posted:0,errors:0};
         statsData[today].pins_posted += 3;
         store.set('pinbot_stats', statsData);
-        ['B09XYZ111','B08ABC222','B07DEF333'].forEach((a,idx)=>{
-          postedLog.push({asin:a,pin_id:'pin_abc00'+(idx+1),
-            title:SAMPLE_PRODUCTS[idx].title,price:SAMPLE_PRODUCTS[idx].price,
+        products.slice(0, 3).forEach((p,idx)=>{
+          postedLog.push({asin:p.asin,pin_id:'pin_abc00'+(idx+1),
+            title:p.title || p.pin_title,price:p.price,
             posted_at:new Date().toISOString()});
         });
         store.set('pinbot_log', postedLog);
@@ -923,7 +930,9 @@ function generateDaywise() {
       </div>
     </div>`;
   }
-  container.innerHTML = html || '<div class="card compact-note">No pins loaded yet. Import the GitHub Actions CSV artifact or run the bot locally to create data/pinterest_pins.csv.</div>';
+  container.innerHTML = html || `<div class="card compact-note">
+    No real Amazon products loaded yet. Import the GitHub Actions <strong>pinbot-csv</strong> artifact, or run the bot to create <strong>data/pinterest_pins.csv</strong>. Fake demo links are hidden so you do not copy invalid Amazon URLs.
+  </div>`;
 }
 
 function copyBlock(label, value, compact=false) {
