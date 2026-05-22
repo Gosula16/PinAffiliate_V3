@@ -78,6 +78,7 @@ def _build(asin, title, price, img, rating, reviews, keyword, source):
         "fetched_at":     datetime.now().isoformat(),
         # Links
         "has_affiliate":  bool(aff),
+        "product_url":    manual,
         "affiliate_link": aff or "",
         "manual_link":    manual,
         "sitestripe_url": _sitestripe(asin),
@@ -231,7 +232,7 @@ def fetch_products(keywords=None):
 def _save_csv(products):
     if not products: return
     fields = ["asin","title","price","currency","rating","reviews","keyword","category",
-              "source","fetched_at","has_affiliate","affiliate_link","manual_link",
+              "source","fetched_at","has_affiliate","product_url","affiliate_link","manual_link",
               "sitestripe_url","search_url","pin_title","pin_description","pin_link",
               "pin_board","pin_image_size","pin_alt_text","image_url"]
     with open(PRODUCTS_CSV, "w", newline="", encoding="utf-8") as f:

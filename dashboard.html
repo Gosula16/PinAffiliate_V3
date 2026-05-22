@@ -287,7 +287,7 @@ textarea{resize:vertical;min-height:70px}
       <table>
         <thead><tr>
           <th>ASIN</th><th>Title</th><th>Price</th><th>Rating</th>
-          <th>Affiliate Link</th><th>Manual Link</th><th>SiteStripe</th><th>Pin Ready</th>
+          <th>Affiliate Link</th><th>Exact Product URL</th><th>Open Product</th><th>Pin Ready</th>
         </tr></thead>
         <tbody id="products-body">
           <tr><td colspan="8" style="color:var(--muted);text-align:center;padding:20px">Run pipeline to fetch gadgets</td></tr>
@@ -322,6 +322,7 @@ textarea{resize:vertical;min-height:70px}
       <div style="background:var(--s2);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:3px">TITLE</div><div style="font-size:12px">50–100 chars, keyword first</div></div>
       <div style="background:var(--s2);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:3px">DESCRIPTION</div><div style="font-size:12px">200–500 chars + hashtags</div></div>
       <div style="background:var(--s2);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:3px">LINK</div><div style="font-size:12px">Affiliate or manual Amazon link</div></div>
+      <div style="background:var(--s2);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:3px">PRODUCT URL</div><div style="font-size:12px">Exact Amazon product page</div></div>
       <div style="background:var(--s2);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:3px">IMAGE</div><div style="font-size:12px">1000×1500px JPEG</div></div>
       <div style="background:var(--s2);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:3px">BOARD</div><div style="font-size:12px">Best Tech Gadgets India</div></div>
       <div style="background:var(--s2);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:3px">ALT TEXT</div><div style="font-size:12px">Product description for SEO</div></div>
@@ -508,7 +509,7 @@ function normalizePinRow(row) {
   const title = row.Title || row.pin_title || row.title || '';
   const description = row.Description || row.pin_description || '';
   const affiliate = row['Affiliate Link'] || row.affiliate_link || '';
-  const manual = row['Manual Link'] || row.manual_link || (asin ? `https://www.amazon.in/dp/${asin}` : '');
+  const manual = row['Exact Product URL'] || row.product_url || row['Manual Link'] || row.manual_link || (asin ? `https://www.amazon.in/dp/${asin}` : '');
   const link = row['Destination URL'] || row.pin_link || affiliate || manual;
   const board = row.Board || row.pin_board || row.board_suggested || 'Best Tech Gadgets India';
   const image = row['Image URL'] || row.image_url || '';
@@ -524,6 +525,7 @@ function normalizePinRow(row) {
     image_url: image,
     image_path: imagePath,
     has_affiliate: hasAffiliate,
+    product_url: manual,
     affiliate_link: affiliate || (link.includes('tag=') ? link : ''),
     manual_link: manual,
     sitestripe_url: normalizeSiteStripeUrl(row['SiteStripe URL'] || row.sitestripe_url, asin, manual),
@@ -829,8 +831,8 @@ function renderProducts() {
     </td>
     <td>
       <div class="aff-row">
-        <a class="aff-link" href="${esc(p.manual_link)}" target="_blank">${esc(p.manual_link)}</a>
-        <button class="btn btn-outline btn-sm" onclick="copyText(${JSON.stringify(p.manual_link || '')})">Copy</button>
+        <a class="aff-link" href="${esc(p.product_url || p.manual_link)}" target="_blank">${esc(p.product_url || p.manual_link)}</a>
+        <button class="btn btn-outline btn-sm" onclick="copyText(${JSON.stringify(p.product_url || p.manual_link || '')})">Copy</button>
       </div>
     </td>
     <td>
@@ -844,7 +846,7 @@ function filterProducts() { renderProducts(); }
 // ── CSV Download ─────────────────────────────────────────────
 function downloadCSV() {
   const fields = ['asin','title','price','currency','rating','reviews','keyword',
-    'has_affiliate','affiliate_link','manual_link','sitestripe_url',
+    'has_affiliate','product_url','affiliate_link','manual_link','sitestripe_url',
     'pin_title','pin_description','pin_link','board_suggested','image_url','fetched_at'];
   const rows = [fields.join(',')];
   products.forEach(p=>{
@@ -861,7 +863,7 @@ function downloadCSV() {
 }
 
 function downloadPinterestCSV() {
-  const fields = ['Title','Description','Destination URL','Board','Alt Text','Image Path','Image URL','ASIN','Price','Affiliate Link','Manual Link','SiteStripe URL','Status','Failure Reason','Created At'];
+  const fields = ['Title','Description','Destination URL','Board','Alt Text','Image Path','Image URL','ASIN','Price','Exact Product URL','Affiliate Link','Manual Link','SiteStripe URL','Status','Failure Reason','Created At'];
   const rows = [fields.join(',')];
   products.forEach(p => {
     const row = {
@@ -874,6 +876,7 @@ function downloadPinterestCSV() {
       'Image URL': p.image_url || '',
       'ASIN': p.asin || '',
       'Price': p.price || '',
+      'Exact Product URL': p.product_url || p.manual_link || '',
       'Affiliate Link': p.affiliate_link || '',
       'Manual Link': p.manual_link || '',
       'SiteStripe URL': p.sitestripe_url || '',
@@ -956,6 +959,7 @@ function renderDailyPin(p) {
     ${copyBlock('Title', title)}
     ${copyBlock('Description', description, true)}
     ${copyBlock('Destination URL', link)}
+    ${copyBlock('Exact Amazon Product URL', p.product_url || p.manual_link || link)}
     ${copyBlock('Board', board)}
     ${copyBlock('Alt Text', alt, true)}
     ${copyBlock('Image Path', p.image_path || p.image_url || 'Use generated 1000x1500 image from output/images', true)}
@@ -963,7 +967,7 @@ function renderDailyPin(p) {
       <div class="copy-label">Manual Affiliate Backup</div>
       <div class="field-actions">
         ${p.sitestripe_url ? `<a class="btn btn-amber btn-sm" href="${esc(p.sitestripe_url)}" target="_blank">Open Product + SiteStripe</a>` : ''}
-        ${p.manual_link ? `<button class="btn btn-outline btn-sm" onclick="copyText(${JSON.stringify(p.manual_link)})">Copy Manual Link</button>` : ''}
+        ${p.product_url || p.manual_link ? `<button class="btn btn-outline btn-sm" onclick="copyText(${JSON.stringify(p.product_url || p.manual_link)})">Copy Exact Product URL</button>` : ''}
       </div>
     </div>
   </article>`;
