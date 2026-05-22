@@ -27,7 +27,9 @@ def _manual_link(asin):
     return f"https://www.amazon.in/dp/{asin}"
 
 def _sitestripe(asin):
-    return f"https://affiliate-program.amazon.in/home/textlink/sitestripe?asin={asin}"
+    # SiteStripe appears on the Amazon product page when the Associate is logged in.
+    # The Associate Central textlink URL redirects to the SiteStripe help/home page.
+    return _manual_link(asin)
 
 def _search_url(keyword):
     return f"https://www.amazon.in/s?k={quote_plus(keyword)}&i=electronics"
