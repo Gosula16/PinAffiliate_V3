@@ -58,7 +58,7 @@ def _pick_board(product: dict) -> str:
         board = PINTEREST_BOARDS.get("fitness")
     else:
         board = PINTEREST_BOARDS.get("deals")
-    return board or list(PINTEREST_BOARDS.values())[0]
+    return board or next((value for value in PINTEREST_BOARDS.values() if value), "")
 
 
 def post_pin(product: dict, image_path: str, caption: dict) -> dict | None:
@@ -85,8 +85,8 @@ def post_pin(product: dict, image_path: str, caption: dict) -> dict | None:
         "board_id":     board_id,
         "title":        caption.get("title", "")[:100],
         "description":  description,
-        "link":         product.get("affiliate_link", ""),
-        "alt_text":     product.get("title", "")[:500],
+        "link":         product.get("pin_link") or product.get("affiliate_link") or product.get("manual_link", ""),
+        "alt_text":     product.get("pin_alt_text") or product.get("title", "")[:500],
         "media_source": {
             "source_type": "media_id",
             "media_id":    media_id,
@@ -103,6 +103,8 @@ def post_pin(product: dict, image_path: str, caption: dict) -> dict | None:
         r.raise_for_status()
         pin_data = r.json()
         pin_id   = pin_data.get("id")
+        pin_data["board_id"] = board_id
+        pin_data["asin"] = product.get("asin")
         logger.info(f"Pin posted! ID={pin_id} ASIN={product.get('asin')}")
 
         # Log it
@@ -143,11 +145,27 @@ def post_batch(products_with_data: list[dict]) -> list[dict]:
     products_with_data: list of {product, image_path, caption}
     Returns list of successfully posted pin results.
     """
+    if not PINTEREST_TOKEN:
+        logger.warning("No Pinterest token - writing manual fallback CSV without delays")
+        return {
+            "posted": [],
+            "failed": [{**item, "failure_reason": "Pinterest token missing"} for item in products_with_data],
+        }
+    if not any(PINTEREST_BOARDS.values()):
+        logger.warning("No Pinterest boards configured - writing manual fallback CSV without delays")
+        return {
+            "posted": [],
+            "failed": [{**item, "failure_reason": "Pinterest board IDs missing"} for item in products_with_data],
+        }
+
     posted = []
+    failed = []
     for i, item in enumerate(products_with_data):
         result = post_pin(item["product"], item["image_path"], item["caption"])
         if result:
             posted.append(result)
+        else:
+            failed.append({**item, "failure_reason": "Pinterest API post failed"})
 
         # Human-like delay between pins (skip delay after last pin)
         if i < len(products_with_data) - 1:
@@ -161,4 +179,4 @@ def post_batch(products_with_data: list[dict]) -> list[dict]:
             time.sleep(delay)
 
     logger.info(f"Batch complete: {len(posted)}/{len(products_with_data)} pins posted")
-    return posted
+    return {"posted": posted, "failed": failed}

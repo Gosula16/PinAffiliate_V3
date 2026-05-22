@@ -37,7 +37,7 @@ jobs:
           GEMINI_API_KEY:         ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN:     ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:       ${{ secrets.TELEGRAM_CHAT_ID }}
-          MAX_PINS_PER_DAY:       '15'
+          MAX_PINS_PER_DAY:       '8'
           MIN_DELAY_SEC:          '180'
           MAX_DELAY_SEC:          '420'
         run: python main.py --once
@@ -57,3 +57,13 @@ jobs:
           name: pinbot-images-${{ github.run_number }}
           path: output/images/
           retention-days: 3
+
+      - name: Upload product CSV files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pinbot-csv-${{ github.run_number }}
+          path: |
+            data/products.csv
+            data/pinterest_pins.csv
+          retention-days: 7

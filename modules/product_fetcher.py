@@ -1,7 +1,9 @@
 """M2 — Product Fetcher: Gadgets only, all fields, CSV, affiliate + manual links."""
 
 import json, logging, os, time, random, re, requests, csv
+from html import unescape
 from datetime import datetime, timedelta
+from urllib.parse import parse_qs, quote_plus, urlparse
 from config import (AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_PARTNER_TAG,
                     PRODUCTS_FILE, PRODUCTS_CSV, POSTED_LOG, DATA_DIR,
                     MAX_PRODUCTS_PER_KW, ASIN_REPOST_DAYS, GADGET_KEYWORDS)
@@ -28,7 +30,31 @@ def _sitestripe(asin):
     return f"https://affiliate-program.amazon.in/home/textlink/sitestripe?asin={asin}"
 
 def _search_url(keyword):
-    return f"https://www.amazon.in/s?k={keyword.replace(' ','+')}&i=electronics"
+    return f"https://www.amazon.in/s?k={quote_plus(keyword)}&i=electronics"
+
+
+def extract_asin(value: str) -> str | None:
+    """Extract an ASIN from common Amazon product URL formats or raw ASIN text."""
+    if not value:
+        return None
+    value = value.strip()
+    if re.fullmatch(r"[A-Z0-9]{10}", value):
+        return value
+    for pattern in (
+        r"/dp/([A-Z0-9]{10})",
+        r"/gp/product/([A-Z0-9]{10})",
+        r"/product/([A-Z0-9]{10})",
+        r"/([A-Z0-9]{10})(?:[/?]|$)",
+    ):
+        match = re.search(pattern, value)
+        if match:
+            return match.group(1)
+    parsed = urlparse(value)
+    for key in ("asin", "ASIN"):
+        asin = parse_qs(parsed.query).get(key, [None])[0]
+        if asin and re.fullmatch(r"[A-Z0-9]{10}", asin):
+            return asin
+    return None
 
 
 def _build(asin, title, price, img, rating, reviews, keyword, source):
@@ -65,6 +91,56 @@ def _build(asin, title, price, img, rating, reviews, keyword, source):
         "pin_image_size": "1000x1500px",
         "pin_alt_text":   f"{title} — available on Amazon India",
     }
+
+
+def _product_page(asin: str, source_url: str | None = None) -> dict | None:
+    """Build a product record from a direct Amazon URL/ASIN."""
+    url = source_url or _manual_link(asin)
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
+            "Accept-Language": "en-IN,en;q=0.9",
+        }
+        r = requests.get(url, headers=headers, timeout=20)
+        if r.status_code != 200:
+            logger.warning(f"Amazon product page returned HTTP {r.status_code} for {asin}")
+            return _build(asin, f"Amazon gadget {asin}", None, "", None, None, "amazon product", "url")
+        html = r.text
+        title_match = re.search(r'id="productTitle"[^>]*>(.*?)<', html, re.S)
+        image_match = re.search(r'"hiRes"\s*:\s*"([^"]+)"', html) or re.search(r'"large"\s*:\s*"([^"]+)"', html)
+        price_match = re.search(r'class="a-price-whole">([0-9,]+)<', html)
+        rating_match = re.search(r'([0-9.]+) out of 5', html)
+        reviews_match = re.search(r'([\d,]+) ratings', html)
+        title = unescape(re.sub(r"\s+", " ", title_match.group(1)).strip()) if title_match else f"Amazon gadget {asin}"
+        price = float(price_match.group(1).replace(",", "")) if price_match else None
+        image = image_match.group(1).replace("\\/", "/") if image_match else ""
+        rating = float(rating_match.group(1)) if rating_match else None
+        reviews = reviews_match.group(1) if reviews_match else None
+        return _build(asin, title, price, image, rating, reviews, "amazon product", "url")
+    except Exception as e:
+        logger.warning(f"Direct Amazon URL fetch failed for {asin}: {e}")
+        return _build(asin, f"Amazon gadget {asin}", None, "", None, None, "amazon product", "url")
+
+
+def fetch_products_from_urls(urls: list[str]) -> list[dict]:
+    """Fetch Pinterest-ready product records from explicit Amazon URLs or ASINs."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    products, seen = [], set()
+    for value in urls:
+        asin = extract_asin(value)
+        if not asin:
+            logger.warning(f"Could not extract ASIN from: {value}")
+            continue
+        if asin in seen:
+            continue
+        product = _product_page(asin, value)
+        if product:
+            products.append(product)
+            seen.add(asin)
+    with open(PRODUCTS_FILE, "w", encoding="utf-8") as f:
+        json.dump({"fetched_at": datetime.now().isoformat(), "products": products}, f, indent=2, ensure_ascii=False)
+    _save_csv(products)
+    return products
 
 
 def _paapi(keyword, n):

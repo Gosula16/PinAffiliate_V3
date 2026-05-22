@@ -25,7 +25,7 @@ TELEGRAM_TOKEN      = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT       = os.getenv("TELEGRAM_CHAT_ID", "")
 
 # ── Bot behaviour ─────────────────────────────────────────────
-MAX_PINS_PER_DAY    = int(os.getenv("MAX_PINS_PER_DAY", 15))
+MAX_PINS_PER_DAY    = int(os.getenv("MAX_PINS_PER_DAY", 8))
 MIN_DELAY_SEC       = int(os.getenv("MIN_DELAY_SEC", 180))
 MAX_DELAY_SEC       = int(os.getenv("MAX_DELAY_SEC", 420))
 MAX_PRODUCTS_PER_KW = 3
@@ -68,6 +68,9 @@ GADGET_KEYWORDS = [
     "external ssd 1tb india",
     "gaming headset budget india",
 ]
+
+# Backward-compatible alias used by the trend engine.
+FALLBACK_KEYWORDS = GADGET_KEYWORDS
 
 # ── Image templates ───────────────────────────────────────────
 IMAGE_TEMPLATES = [

@@ -69,6 +69,19 @@ def _send_document(file_path: str, caption: str):
         logger.warning(f"Telegram file send failed: {e}")
 
 
+def notify_manual_csv(csv_path: str, failed_count: int, reason: str = ""):
+    """Tell Telegram that manual Pinterest posting CSV is ready."""
+    msg = (
+        "*Pinterest manual CSV ready*\n"
+        f"Pins needing manual post: *{failed_count}*\n"
+        f"Reason: `{(reason or 'Pinterest API unavailable')[:200]}`\n"
+        "Use the attached CSV fields for Pinterest bulk/manual posting."
+    )
+    _send_text(msg)
+    if csv_path and os.path.exists(csv_path):
+        _send_document(csv_path, "*Pinterest-ready fallback CSV*")
+
+
 # ── Pinterest-format product notification ────────────────────
 
 def notify_product_pin(product: dict, caption: dict):
