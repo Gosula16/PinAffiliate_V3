@@ -71,6 +71,24 @@ GADGET_KEYWORDS = [
 
 # Backward-compatible alias used by the trend engine.
 FALLBACK_KEYWORDS = GADGET_KEYWORDS
+# ── Fallback keywords (used when pytrends fails) ──────────────
+FALLBACK_KEYWORDS = [
+    "best wireless earbuds under 2000",
+    "power bank 20000mah india",
+    "gaming mouse budget india",
+    "mechanical keyboard india",
+    "usb hub laptop india",
+    "ring light youtube creator",
+    "webcam work from home",
+    "laptop stand adjustable",
+    "portable bluetooth speaker",
+    "smartwatch under 3000 india",
+    "action camera budget",
+    "dash cam car india",
+    "smart bulb wifi india",
+    "external ssd 1tb india",
+    "gaming headset budget india",
+]
 
 # ── Image templates ───────────────────────────────────────────
 IMAGE_TEMPLATES = [
