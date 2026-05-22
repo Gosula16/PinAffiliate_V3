@@ -35,6 +35,11 @@ def _search_url(keyword):
     return f"https://www.amazon.in/s?k={quote_plus(keyword)}&i=electronics"
 
 
+def _clean_html(value: str) -> str:
+    value = re.sub(r"<[^>]+>", " ", value or "")
+    return unescape(re.sub(r"\s+", " ", value)).strip()
+
+
 def extract_asin(value: str) -> str | None:
     """Extract an ASIN from common Amazon product URL formats or raw ASIN text."""
     if not value:
@@ -174,27 +179,41 @@ def _paapi(keyword, n):
 
 def _scrape(keyword, n):
     try:
-        url = f"https://www.amazon.in/s?k={keyword.replace(' ','+')}&i=electronics"
-        headers = {"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36","Accept-Language":"en-IN"}
+        url = _search_url(keyword)
+        headers = {"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36","Accept-Language":"en-IN,en;q=0.9"}
         r = requests.get(url, headers=headers, timeout=15)
         if r.status_code != 200: return []
-        asins   = list(dict.fromkeys(re.findall(r'data-asin="([A-Z0-9]{10})"', r.text)))
-        titles  = re.findall(r'a-size-medium[^"]*"[^>]*><span[^>]*>([^<]{10,120})<', r.text)
-        prices  = re.findall(r'a-price-whole">([0-9,]+)<', r.text)
-        ratings = re.findall(r'([0-9.]+) out of 5', r.text)
-        reviews = re.findall(r'([\d,]+) ratings', r.text)
-        imgs    = re.findall(r's-image"[^>]*src="([^"]+)"', r.text)
+        matches = list(re.finditer(r'data-asin="([A-Z0-9]{10})"', r.text))
         out = []
-        for i, asin in enumerate(asins):
-            if not asin: continue
-            price = float(prices[i].replace(",","")) if i < len(prices) else None
+        seen = set()
+        for i, match in enumerate(matches):
+            asin = match.group(1)
+            if not asin or asin in seen:
+                continue
+            seen.add(asin)
+            end = matches[i + 1].start() if i + 1 < len(matches) else match.start() + 16000
+            block = r.text[match.start():end]
+
+            title_match = (
+                re.search(r'<h2[^>]*>.*?<span[^>]*>(.*?)</span>', block, re.S)
+                or re.search(r'aria-label="([^"]{20,250})"', block, re.S)
+                or re.search(r'<img[^>]+alt="([^"]{20,250})"', block, re.S)
+            )
+            title = _clean_html(title_match.group(1)) if title_match else keyword.title()
+            title = title.rstrip(".")[:220]
+
+            price_match = re.search(r'a-price-whole">([0-9,]+)<', block)
+            rating_match = re.search(r'([0-9.]+) out of 5', block)
+            reviews_match = re.search(r'([\d,]+) ratings', block)
+            image_match = re.search(r'class="s-image"[^>]*src="([^"]+)"', block)
+            price = float(price_match.group(1).replace(",","")) if price_match else None
             out.append(_build(
                 asin,
-                titles[i]  if i < len(titles)  else keyword.title(),
+                title,
                 price,
-                imgs[i]    if i < len(imgs)    else None,
-                float(ratings[i]) if i < len(ratings) else None,
-                reviews[i] if i < len(reviews) else None,
+                image_match.group(1) if image_match else None,
+                float(rating_match.group(1)) if rating_match else None,
+                reviews_match.group(1) if reviews_match else None,
                 keyword, "scrape"
             ))
             if len(out) >= n: break
