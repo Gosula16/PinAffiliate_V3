@@ -1,0 +1,38 @@
+# Secrets — NEVER commit these
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+venv/
+env/
+.venv/
+
+# Bot output — don't push generated images or logs
+output/
+logs/
+data/products.json
+data/trends.json
+data/posted_log.json
+data/daily_stats.json
+data/rotation_queue.json
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node (if any tools added later)
+node_modules/

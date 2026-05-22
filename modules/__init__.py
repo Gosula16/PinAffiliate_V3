@@ -1,0 +1,1 @@
+# PinAffiliateBot modules package

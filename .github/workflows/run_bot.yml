@@ -1,0 +1,59 @@
+name: PinAffiliateBot — Daily Runner
+
+on:
+  schedule:
+    - cron: '0 2 * * *'   # 7:30 AM IST (UTC+5:30 = UTC 2:00)
+    - cron: '30 6 * * *'  # 12:00 PM IST
+    - cron: '0 13 * * *'  # 6:30 PM IST
+    - cron: '30 16 * * *' # 10:00 PM IST
+  workflow_dispatch:       # Manual trigger from GitHub UI
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run PinAffiliateBot
+        env:
+          AMAZON_ACCESS_KEY:      ${{ secrets.AMAZON_ACCESS_KEY }}
+          AMAZON_SECRET_KEY:      ${{ secrets.AMAZON_SECRET_KEY }}
+          AMAZON_PARTNER_TAG:     ${{ secrets.AMAZON_PARTNER_TAG }}
+          PINTEREST_ACCESS_TOKEN: ${{ secrets.PINTEREST_ACCESS_TOKEN }}
+          BOARD_TECH:             ${{ secrets.BOARD_TECH }}
+          BOARD_HOME:             ${{ secrets.BOARD_HOME }}
+          BOARD_FITNESS:          ${{ secrets.BOARD_FITNESS }}
+          BOARD_DEALS:            ${{ secrets.BOARD_DEALS }}
+          GEMINI_API_KEY:         ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN:     ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:       ${{ secrets.TELEGRAM_CHAT_ID }}
+          MAX_PINS_PER_DAY:       '15'
+          MIN_DELAY_SEC:          '180'
+          MAX_DELAY_SEC:          '420'
+        run: python main.py --once
+
+      - name: Upload logs as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pinbot-logs-${{ github.run_number }}
+          path: logs/
+          retention-days: 7
+
+      - name: Upload generated images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pinbot-images-${{ github.run_number }}
+          path: output/images/
+          retention-days: 3

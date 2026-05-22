@@ -1,0 +1,8 @@
+pytrends==4.9.2
+Pillow==10.3.0
+google-generativeai==0.5.4
+requests==2.31.0
+schedule==1.2.1
+python-dotenv==1.0.0
+tenacity==8.2.3
+python-amazon-paapi==5.0.0

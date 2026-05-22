@@ -1,0 +1,169 @@
+"""M2 — Product Fetcher: Gadgets only, all fields, CSV, affiliate + manual links."""
+
+import json, logging, os, time, random, re, requests, csv
+from datetime import datetime, timedelta
+from config import (AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_PARTNER_TAG,
+                    PRODUCTS_FILE, PRODUCTS_CSV, POSTED_LOG, DATA_DIR,
+                    MAX_PRODUCTS_PER_KW, ASIN_REPOST_DAYS, GADGET_KEYWORDS)
+
+logger = logging.getLogger("pinbot.products")
+
+
+def _posted_asins():
+    if not os.path.exists(POSTED_LOG): return set()
+    with open(POSTED_LOG) as f: log = json.load(f)
+    cutoff = datetime.now() - timedelta(days=ASIN_REPOST_DAYS)
+    return {e["asin"] for e in log if datetime.fromisoformat(e["posted_at"]) > cutoff}
+
+
+def _aff_link(asin):
+    if AMAZON_PARTNER_TAG:
+        return f"https://www.amazon.in/dp/{asin}?tag={AMAZON_PARTNER_TAG}"
+    return None
+
+def _manual_link(asin):
+    return f"https://www.amazon.in/dp/{asin}"
+
+def _sitestripe(asin):
+    return f"https://affiliate-program.amazon.in/home/textlink/sitestripe?asin={asin}"
+
+def _search_url(keyword):
+    return f"https://www.amazon.in/s?k={keyword.replace(' ','+')}&i=electronics"
+
+
+def _build(asin, title, price, img, rating, reviews, keyword, source):
+    aff  = _aff_link(asin)
+    manual = _manual_link(asin)
+    kw   = keyword.lower()
+    price_str = f"Rs. {int(price):,}" if price else "check listing"
+    return {
+        "asin":           asin,
+        "title":          title,
+        "price":          price,
+        "currency":       "INR",
+        "image_url":      img or "",
+        "rating":         rating,
+        "reviews":        reviews,
+        "keyword":        keyword,
+        "category":       "Electronics & Gadgets",
+        "source":         source,
+        "fetched_at":     datetime.now().isoformat(),
+        # Links
+        "has_affiliate":  bool(aff),
+        "affiliate_link": aff or "",
+        "manual_link":    manual,
+        "sitestripe_url": _sitestripe(asin),
+        "search_url":     _search_url(keyword),
+        # Pinterest ready fields
+        "pin_title":      f"Best {keyword.title()} India 2026 | Top Pick",
+        "pin_description":(f"Looking for the best {kw} in India? "
+                           f"This top-rated gadget is available for {price_str} on Amazon. "
+                           f"Check the link for full specs and today's lowest price! "
+                           f"#{kw.replace(' ','')} #amazonindia #gadgets #techindia"),
+        "pin_link":       aff or manual,
+        "pin_board":      "Best Tech Gadgets India",
+        "pin_image_size": "1000x1500px",
+        "pin_alt_text":   f"{title} — available on Amazon India",
+    }
+
+
+def _paapi(keyword, n):
+    if not AMAZON_ACCESS_KEY or not AMAZON_SECRET_KEY: return []
+    try:
+        from amazon.paapi import AmazonApi
+        api   = AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_PARTNER_TAG, "IN")
+        items = api.search_items(keywords=keyword, item_count=n*2)
+        out   = []
+        for item in (items.items or []):
+            try:
+                asin  = item.asin
+                title = item.item_info.title.display_value
+                price = None
+                if item.offers and item.offers.listings:
+                    price = item.offers.listings[0].price.amount
+                img = None
+                if item.images and item.images.primary:
+                    img = item.images.primary.large.url
+                out.append(_build(asin, title, price, img, None, None, keyword, "paapi"))
+                if len(out) >= n: break
+            except: continue
+        return out
+    except Exception as e:
+        logger.warning(f"PAAPI '{keyword}': {e}")
+        return []
+
+
+def _scrape(keyword, n):
+    try:
+        url = f"https://www.amazon.in/s?k={keyword.replace(' ','+')}&i=electronics"
+        headers = {"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36","Accept-Language":"en-IN"}
+        r = requests.get(url, headers=headers, timeout=15)
+        if r.status_code != 200: return []
+        asins   = list(dict.fromkeys(re.findall(r'data-asin="([A-Z0-9]{10})"', r.text)))
+        titles  = re.findall(r'a-size-medium[^"]*"[^>]*><span[^>]*>([^<]{10,120})<', r.text)
+        prices  = re.findall(r'a-price-whole">([0-9,]+)<', r.text)
+        ratings = re.findall(r'([0-9.]+) out of 5', r.text)
+        reviews = re.findall(r'([\d,]+) ratings', r.text)
+        imgs    = re.findall(r's-image"[^>]*src="([^"]+)"', r.text)
+        out = []
+        for i, asin in enumerate(asins):
+            if not asin: continue
+            price = float(prices[i].replace(",","")) if i < len(prices) else None
+            out.append(_build(
+                asin,
+                titles[i]  if i < len(titles)  else keyword.title(),
+                price,
+                imgs[i]    if i < len(imgs)    else None,
+                float(ratings[i]) if i < len(ratings) else None,
+                reviews[i] if i < len(reviews) else None,
+                keyword, "scrape"
+            ))
+            if len(out) >= n: break
+        return out
+    except Exception as e:
+        logger.warning(f"Scrape '{keyword}': {e}")
+        return []
+
+
+def fetch_products(keywords=None):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    posted = _posted_asins()
+    use_kw = GADGET_KEYWORDS  # always gadgets only
+
+    all_products, seen = [], set()
+    for kw in use_kw:
+        logger.info(f"Fetching: {kw}")
+        prods = _paapi(kw, MAX_PRODUCTS_PER_KW) or _scrape(kw, MAX_PRODUCTS_PER_KW)
+        for p in prods:
+            if p["asin"] not in posted and p["asin"] not in seen:
+                seen.add(p["asin"])
+                all_products.append(p)
+        time.sleep(random.uniform(1.0, 2.0))
+
+    # Save JSON
+    with open(PRODUCTS_FILE, "w") as f:
+        json.dump({"fetched_at": datetime.now().isoformat(), "products": all_products}, f, indent=2, ensure_ascii=False)
+
+    # Save CSV — all fields
+    _save_csv(all_products)
+    logger.info(f"Saved {len(all_products)} gadgets | CSV + JSON written")
+    return all_products
+
+
+def _save_csv(products):
+    if not products: return
+    fields = ["asin","title","price","currency","rating","reviews","keyword","category",
+              "source","fetched_at","has_affiliate","affiliate_link","manual_link",
+              "sitestripe_url","search_url","pin_title","pin_description","pin_link",
+              "pin_board","pin_image_size","pin_alt_text","image_url"]
+    with open(PRODUCTS_CSV, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+        w.writeheader()
+        w.writerows(products)
+    logger.info(f"CSV: {PRODUCTS_CSV}")
+
+
+def load_products():
+    if not os.path.exists(PRODUCTS_FILE): return []
+    with open(PRODUCTS_FILE) as f:
+        return json.load(f).get("products", [])
