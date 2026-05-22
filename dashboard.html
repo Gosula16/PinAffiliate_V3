@@ -13,7 +13,7 @@
   --text:#e8eaf0;--muted:#6b7280;--font:'Inter',sans-serif;--mono:'JetBrains Mono',monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;overflow-x:hidden}
 .shell{display:grid;grid-template-columns:230px 1fr;min-height:100vh}
 
 /* sidebar */
@@ -116,6 +116,24 @@ textarea{resize:vertical;min-height:70px}
 .day-badge{background:var(--red);color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px}
 .day-pins{font-size:12px;color:var(--muted);font-family:var(--mono)}
 .pins-row{display:flex;gap:14px;overflow-x:auto;padding-bottom:8px}
+.pin-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.file-input{position:absolute;inline-size:1px;block-size:1px;opacity:0;pointer-events:none}
+.data-source{font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:8px}
+.daily-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.daily-pin{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;min-width:0}
+.daily-pin-head{display:grid;grid-template-columns:92px 1fr;gap:12px;padding:12px;border-bottom:1px solid var(--border)}
+.daily-img{width:92px;aspect-ratio:2/3;border-radius:7px;background:linear-gradient(135deg,#1d3557,#e63946);object-fit:cover}
+.daily-img-empty{display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.55);font-family:var(--mono);font-size:10px;text-align:center;padding:8px}
+.daily-title{font-size:13px;font-weight:700;line-height:1.35;margin-bottom:6px}
+.daily-meta{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.copy-field{padding:11px 12px;border-top:1px solid var(--border)}
+.copy-field:first-child{border-top:none}
+.copy-label{font-size:10px;color:var(--muted);font-family:var(--mono);letter-spacing:.8px;text-transform:uppercase;margin-bottom:5px}
+.copy-value{background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:9px 10px;color:var(--cyan);font-family:var(--mono);font-size:11px;line-height:1.45;word-break:break-word;cursor:pointer;transition:.15s;min-height:36px}
+.copy-value:hover{border-color:var(--cyan);background:#17202d}
+.field-actions{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap}
+.compact-note{font-size:11px;color:var(--muted);line-height:1.6}
+.format-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
 
 /* copy box */
 .copy-box{background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:10px 14px;font-family:var(--mono);font-size:11px;color:var(--cyan);cursor:pointer;transition:.15s;position:relative}
@@ -136,7 +154,16 @@ textarea{resize:vertical;min-height:70px}
 @media(max-width:768px){
   .shell{grid-template-columns:1fr}
   .sidebar{display:none}
+  .main{padding:24px 14px;max-width:100vw;overflow-x:hidden}
+  .page-hdr>div:first-child{min-width:0;max-width:100%}
+  .page-title,.page-sub{overflow-wrap:anywhere}
   .two-col,.three-col{grid-template-columns:1fr}
+  .daily-grid{grid-template-columns:1fr}
+  .daily-pin-head{grid-template-columns:80px minmax(0,1fr)}
+  .daily-img{width:80px}
+  .format-grid{grid-template-columns:1fr}
+  .card{padding:16px}
+  .pin-toolbar .btn{padding:8px 11px;font-size:12px}
 }
 </style>
 </head>
@@ -274,16 +301,24 @@ textarea{resize:vertical;min-height:70px}
 <!-- ══ DAY-WISE PINS ══ -->
 <div class="page" id="page-daywise">
   <div class="page-hdr">
-    <div><div class="page-title">Day-wise Pin Schedule</div><div class="page-sub">Pinterest-ready format — copy fields directly</div></div>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-green btn-sm" onclick="downloadCSV()">📥 Download CSV</button>
-      <button class="btn btn-blue btn-sm" onclick="generateDaywise()">↻ Generate Schedule</button>
+    <div><div class="page-title">Daily Pins Board</div><div class="page-sub">Pinterest-ready cards from data/pinterest_pins.csv or products.csv</div></div>
+    <div class="pin-toolbar">
+      <input class="file-input" type="file" id="pin-csv-input" accept=".csv" onchange="importPinsCSV(event)">
+      <button class="btn btn-green btn-sm" onclick="document.getElementById('pin-csv-input').click()">Import CSV</button>
+      <button class="btn btn-outline btn-sm" onclick="loadDataFiles()">Load data/ CSV</button>
+      <button class="btn btn-blue btn-sm" onclick="generateDaywise()">Refresh Board</button>
+      <button class="btn btn-amber btn-sm" onclick="downloadPinterestCSV()">Download Pin CSV</button>
     </div>
+  </div>
+  <div class="three-col">
+    <div class="stat-card"><div class="stat-label">Pins Ready</div><div class="stat-value" style="color:var(--green)" id="dw-ready">0</div><div class="stat-sub">copy-ready cards</div></div>
+    <div class="stat-card"><div class="stat-label">Days Filled</div><div class="stat-value" style="color:var(--blue)" id="dw-days">0</div><div class="stat-sub">daily groups</div></div>
+    <div class="stat-card"><div class="stat-label">Source</div><div class="stat-value" style="font-size:16px;color:var(--amber)" id="dw-source">sample</div><div class="stat-sub">current data</div></div>
   </div>
   <!-- Pinterest format legend -->
   <div class="card" style="border-color:var(--red)">
-    <div class="card-title">📌 Pinterest Pin Format — All Fields</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+    <div class="card-title">Pinterest Pin Format - All Fields</div>
+    <div class="format-grid">
       <div style="background:var(--s2);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:3px">TITLE</div><div style="font-size:12px">50–100 chars, keyword first</div></div>
       <div style="background:var(--s2);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:3px">DESCRIPTION</div><div style="font-size:12px">200–500 chars + hashtags</div></div>
       <div style="background:var(--s2);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:3px">LINK</div><div style="font-size:12px">Affiliate or manual Amazon link</div></div>
@@ -291,6 +326,7 @@ textarea{resize:vertical;min-height:70px}
       <div style="background:var(--s2);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:3px">BOARD</div><div style="font-size:12px">Best Tech Gadgets India</div></div>
       <div style="background:var(--s2);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:3px">ALT TEXT</div><div style="font-size:12px">Product description for SEO</div></div>
     </div>
+    <div class="data-source" id="csv-source-label">Waiting for generated CSV. You can import data/pinterest_pins.csv from a workflow artifact.</div>
   </div>
   <div id="daywise-container"></div>
 </div>
@@ -428,9 +464,120 @@ const SAMPLE_PRODUCTS = [
 let products = store.get('pinbot_products') || SAMPLE_PRODUCTS;
 let postedLog = store.get('pinbot_log') || [];
 let statsData = store.get('pinbot_stats') || {};
+let dashboardSource = store.get('pinbot_source') || 'sample data';
+
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[ch]));
+}
+
+function parseCSV(text) {
+  const rows = [];
+  let row = [], cell = '', quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i], next = text[i + 1];
+    if (ch === '"' && quoted && next === '"') { cell += '"'; i++; continue; }
+    if (ch === '"') { quoted = !quoted; continue; }
+    if (ch === ',' && !quoted) { row.push(cell); cell = ''; continue; }
+    if ((ch === '\n' || ch === '\r') && !quoted) {
+      if (ch === '\r' && next === '\n') i++;
+      row.push(cell); cell = '';
+      if (row.some(v => v.trim() !== '')) rows.push(row);
+      row = [];
+      continue;
+    }
+    cell += ch;
+  }
+  row.push(cell);
+  if (row.some(v => v.trim() !== '')) rows.push(row);
+  if (!rows.length) return [];
+  const headers = rows.shift().map(h => h.trim());
+  return rows.map(values => Object.fromEntries(headers.map((h, i) => [h, values[i] ?? ''])));
+}
+
+function normalizePinRow(row) {
+  const asin = row.ASIN || row.asin || '';
+  const title = row.Title || row.pin_title || row.title || '';
+  const description = row.Description || row.pin_description || '';
+  const affiliate = row['Affiliate Link'] || row.affiliate_link || '';
+  const manual = row['Manual Link'] || row.manual_link || (asin ? `https://www.amazon.in/dp/${asin}` : '');
+  const link = row['Destination URL'] || row.pin_link || affiliate || manual;
+  const board = row.Board || row.pin_board || row.board_suggested || 'Best Tech Gadgets India';
+  const image = row['Image URL'] || row.image_url || '';
+  const imagePath = row['Image Path'] || row.image_path || '';
+  const hasAffiliate = String(row.has_affiliate ?? '').toLowerCase() === 'true' || !!affiliate || (link && link.includes('tag='));
+  return {
+    asin,
+    title: row.title || title,
+    price: Number(String(row.Price || row.price || '').replace(/[^0-9.]/g, '')) || '',
+    rating: row.rating || '',
+    reviews: row.reviews || '',
+    keyword: row.keyword || '',
+    image_url: image,
+    image_path: imagePath,
+    has_affiliate: hasAffiliate,
+    affiliate_link: affiliate || (link.includes('tag=') ? link : ''),
+    manual_link: manual,
+    sitestripe_url: row['SiteStripe URL'] || row.sitestripe_url || (asin ? `https://affiliate-program.amazon.in/home/textlink/sitestripe?asin=${asin}` : ''),
+    pin_title: title,
+    pin_description: description,
+    pin_link: link,
+    pin_board: board,
+    board_suggested: board,
+    pin_alt_text: row['Alt Text'] || row.pin_alt_text || row.title || title,
+    status: row.Status || 'ready',
+    failure_reason: row['Failure Reason'] || '',
+    fetched_at: row['Created At'] || row.fetched_at || new Date().toISOString(),
+  };
+}
+
+async function fetchTextIfExists(path) {
+  try {
+    const res = await fetch(path, { cache: 'no-store' });
+    if (!res.ok) return null;
+    return await res.text();
+  } catch {
+    return null;
+  }
+}
+
+async function loadDataFiles() {
+  const pinCsv = await fetchTextIfExists('data/pinterest_pins.csv');
+  if (pinCsv) {
+    products = parseCSV(pinCsv).map(normalizePinRow).filter(p => p.pin_title || p.title || p.asin);
+    dashboardSource = 'data/pinterest_pins.csv';
+  } else {
+    const productCsv = await fetchTextIfExists('data/products.csv');
+    if (productCsv) {
+      products = parseCSV(productCsv).map(normalizePinRow).filter(p => p.pin_title || p.title || p.asin);
+      dashboardSource = 'data/products.csv';
+    }
+  }
+  store.set('pinbot_products', products);
+  store.set('pinbot_source', dashboardSource);
+  refreshAll();
+  if (document.getElementById('page-daywise').classList.contains('active')) generateDaywise();
+}
+
+function importPinsCSV(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    products = parseCSV(String(reader.result)).map(normalizePinRow).filter(p => p.pin_title || p.title || p.asin);
+    dashboardSource = file.name;
+    store.set('pinbot_products', products);
+    store.set('pinbot_source', dashboardSource);
+    refreshAll();
+    generateDaywise();
+  };
+  reader.readAsText(file);
+}
 
 // ── Navigation ───────────────────────────────────────────────
 function nav(page) {
+  if (location.hash !== '#' + page) history.replaceState(null, '', '#' + page);
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
@@ -467,7 +614,7 @@ setInterval(updateDate, 1000); updateDate();
 function refreshAll() {
   const today = new Date().toISOString().split('T')[0];
   const ts = statsData[today] || {pins_posted:0,errors:0};
-  const max = 15;
+  const max = 8;
   const pct = Math.min(100, Math.round(ts.pins_posted/max*100));
   const affCount = products.filter(p=>p.has_affiliate).length;
   const manCount = products.filter(p=>!p.has_affiliate).length;
@@ -481,6 +628,10 @@ function refreshAll() {
   document.getElementById('p-done').textContent = ts.pins_posted;
   document.getElementById('p-max').textContent = max;
   document.getElementById('prog-bar').style.width = pct+'%';
+  const sourceEl = document.getElementById('csv-source-label');
+  if (sourceEl) sourceEl.textContent = `Current source: ${dashboardSource}. Use Import CSV for GitHub Actions artifacts.`;
+  const dwSource = document.getElementById('dw-source');
+  if (dwSource) dwSource.textContent = dashboardSource.split(/[\\/]/).pop().slice(0, 18);
 
   const tag = document.getElementById('s-amz-tag')?.value || 'newdro04-21';
   document.getElementById('partner-tag-display').textContent = tag || 'Not set';
@@ -650,7 +801,7 @@ function renderProducts() {
   const q = document.getElementById('prod-search')?.value?.toLowerCase()||'';
   const affF = document.getElementById('prod-aff-filter')?.value||'';
   let filtered = products.filter(p=>{
-    const matchQ = !q || p.asin.toLowerCase().includes(q) || p.title.toLowerCase().includes(q);
+    const matchQ = !q || String(p.asin||'').toLowerCase().includes(q) || String(p.title||p.pin_title||'').toLowerCase().includes(q);
     const matchA = !affF || (affF==='yes'?p.has_affiliate:!p.has_affiliate);
     return matchQ && matchA;
   });
@@ -660,23 +811,23 @@ function renderProducts() {
     return;
   }
   tbody.innerHTML = filtered.map(p=>`<tr>
-    <td class="td-mono">${p.asin}</td>
-    <td class="td-title" title="${p.title}">${p.title}</td>
+    <td class="td-mono">${esc(p.asin)}</td>
+    <td class="td-title" title="${esc(p.title || p.pin_title)}">${esc(p.title || p.pin_title)}</td>
     <td class="td-mono" style="white-space:nowrap">${p.price?'Rs. '+p.price.toLocaleString():'—'}</td>
-    <td class="td-mono">${p.rating||'—'} ⭐</td>
+    <td class="td-mono">${esc(p.rating||'—')} ⭐</td>
     <td>
       ${p.has_affiliate && p.affiliate_link
-        ? `<div class="aff-row"><span class="tag tag-green">✅ Auto</span> <a class="aff-link" href="${p.affiliate_link}" target="_blank">${p.affiliate_link.slice(0,40)}...</a><button class="btn btn-outline btn-sm" onclick="copyText('${p.affiliate_link}')">Copy</button></div>`
+        ? `<div class="aff-row"><span class="tag tag-green">✅ Auto</span> <a class="aff-link" href="${esc(p.affiliate_link)}" target="_blank">${esc(p.affiliate_link.slice(0,40))}...</a><button class="btn btn-outline btn-sm" onclick="copyText(${JSON.stringify(p.affiliate_link)})">Copy</button></div>`
         : `<span class="tag tag-amber">⚠ No tag</span>`}
     </td>
     <td>
       <div class="aff-row">
-        <a class="aff-link" href="${p.manual_link}" target="_blank">${p.manual_link}</a>
-        <button class="btn btn-outline btn-sm" onclick="copyText('${p.manual_link}')">Copy</button>
+        <a class="aff-link" href="${esc(p.manual_link)}" target="_blank">${esc(p.manual_link)}</a>
+        <button class="btn btn-outline btn-sm" onclick="copyText(${JSON.stringify(p.manual_link || '')})">Copy</button>
       </div>
     </td>
     <td>
-      <a class="btn btn-amber btn-sm" href="${p.sitestripe_url}" target="_blank">Get Aff. Link ↗</a>
+      <a class="btn btn-amber btn-sm" href="${esc(p.sitestripe_url)}" target="_blank">Get Aff. Link ↗</a>
     </td>
     <td><span class="tag tag-${p.has_affiliate?'green':'blue'}">${p.has_affiliate?'Ready':'Get link'}</span></td>
   </tr>`).join('');
@@ -702,69 +853,113 @@ function downloadCSV() {
   a.click();
 }
 
+function downloadPinterestCSV() {
+  const fields = ['Title','Description','Destination URL','Board','Alt Text','Image Path','Image URL','ASIN','Price','Affiliate Link','Manual Link','SiteStripe URL','Status','Failure Reason','Created At'];
+  const rows = [fields.join(',')];
+  products.forEach(p => {
+    const row = {
+      'Title': p.pin_title || p.title || '',
+      'Description': p.pin_description || '',
+      'Destination URL': p.pin_link || p.affiliate_link || p.manual_link || '',
+      'Board': p.pin_board || p.board_suggested || 'Best Tech Gadgets India',
+      'Alt Text': p.pin_alt_text || p.title || p.pin_title || '',
+      'Image Path': p.image_path || '',
+      'Image URL': p.image_url || '',
+      'ASIN': p.asin || '',
+      'Price': p.price || '',
+      'Affiliate Link': p.affiliate_link || '',
+      'Manual Link': p.manual_link || '',
+      'SiteStripe URL': p.sitestripe_url || '',
+      'Status': p.status || 'ready',
+      'Failure Reason': p.failure_reason || '',
+      'Created At': p.fetched_at || new Date().toISOString(),
+    };
+    rows.push(fields.map(f => `"${String(row[f] ?? '').replace(/"/g,'""')}"`).join(','));
+  });
+  const blob = new Blob([rows.join('\n')], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `PinAffiliateBot_Pinterest_Pins_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+}
+
 // ── Day-wise Pins ────────────────────────────────────────────
 function generateDaywise() {
   const container = document.getElementById('daywise-container');
-  const days = 7;
-  const pinsPerDay = Math.ceil(products.length / days);
+  const maxPerDay = 8;
+  const usable = products.filter(p => p.pin_title || p.title || p.asin);
+  const days = Math.max(1, Math.ceil(usable.length / maxPerDay));
   let html = '';
+
+  document.getElementById('dw-ready').textContent = usable.length;
+  document.getElementById('dw-days').textContent = usable.length ? days : 0;
+  document.getElementById('dw-source').textContent = dashboardSource.split(/[\\/]/).pop().slice(0, 18);
 
   for (let d=0; d<days; d++) {
     const date = new Date();
     date.setDate(date.getDate() + d);
-    const dateStr = date.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'});
-    const dayProds = products.slice(d*pinsPerDay, (d+1)*pinsPerDay);
+    const dateStr = date.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+    const dayProds = usable.slice(d*maxPerDay, (d+1)*maxPerDay);
     if (!dayProds.length) continue;
 
     html += `<div class="day-section">
       <div class="day-header">
         <span class="day-badge">Day ${d+1}</span>
-        <span style="font-size:14px;font-weight:600">${dateStr}</span>
+        <span style="font-size:14px;font-weight:600">${esc(dateStr)}</span>
         <span class="day-pins">${dayProds.length} pins scheduled</span>
       </div>
-      <div class="pins-row">
-        ${dayProds.map(p => `
-          <div style="flex-shrink:0;width:280px;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">
-            <!-- Pin Preview Card -->
-            <div class="pin-card" style="width:100%;border-radius:0">
-              <div class="pin-img-area" style="aspect-ratio:2/3;max-height:160px">
-                ${p.image_url ? `<img src="${p.image_url}" alt="${p.title}" onerror="this.style.display='none'">` : ''}
-                <div class="pin-img-placeholder">1000×1500px</div>
-              </div>
-              <div class="pin-body">
-                <div class="pin-body-title">${p.pin_title||p.title}</div>
-                <div class="pin-body-price">${p.price?'Rs. '+p.price.toLocaleString():'Check price'}</div>
-                <div class="pin-body-domain">amazon.in</div>
-              </div>
-            </div>
-            <!-- Pinterest Fields -->
-            <div style="padding:12px;border-top:1px solid var(--border)">
-              <div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:4px">📌 TITLE</div>
-              <div class="copy-box" onclick="copyText('${p.pin_title?.replace(/'/g,"\\'")||""}')">
-                ${p.pin_title||p.title}
-              </div>
-              <div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin:8px 0 4px">📝 DESCRIPTION</div>
-              <div class="copy-box" style="max-height:60px;overflow:hidden;font-size:10px" onclick="copyText('${p.pin_description?.replace(/'/g,"\\'").replace(/\n/g,' ')||""}')">
-                ${(p.pin_description||'').slice(0,120)}...
-              </div>
-              <div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin:8px 0 4px">🔗 LINK</div>
-              ${p.has_affiliate && p.affiliate_link
-                ? `<div class="copy-box" onclick="copyText('${p.affiliate_link}')" style="font-size:10px"><span class="tag tag-green" style="margin-right:4px">Aff</span>${p.affiliate_link.slice(0,45)}...</div>`
-                : `<div style="display:flex;gap:6px;flex-wrap:wrap">
-                    <a class="btn btn-amber btn-sm" href="${p.sitestripe_url}" target="_blank" style="font-size:10px">Get Aff. Link ↗</a>
-                    <div class="copy-box" onclick="copyText('${p.manual_link}')" style="font-size:10px;flex:1">${p.manual_link}</div>
-                   </div>`}
-              <div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin:8px 0 4px">📋 BOARD</div>
-              <div class="copy-box" onclick="copyText('${p.board_suggested||'Best Tech Gadgets India'}')" style="font-size:11px">${p.board_suggested||'Best Tech Gadgets India'}</div>
-              <div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin:8px 0 4px">🖼 IMAGE SIZE</div>
-              <div style="font-size:11px;color:var(--cyan);font-family:var(--mono)">1000 × 1500 px (2:3 ratio)</div>
-            </div>
-          </div>
-        `).join('')}
+      <div class="daily-grid">
+        ${dayProds.map(renderDailyPin).join('')}
       </div>
     </div>`;
   }
-  container.innerHTML = html || '<div style="color:var(--muted);padding:20px">No products — run pipeline first</div>';
+  container.innerHTML = html || '<div class="card compact-note">No pins loaded yet. Import the GitHub Actions CSV artifact or run the bot locally to create data/pinterest_pins.csv.</div>';
+}
+
+function copyBlock(label, value, compact=false) {
+  const text = String(value || '').trim();
+  return `<div class="copy-field">
+    <div class="copy-label">${label}</div>
+    <div class="copy-value" style="${compact?'max-height:96px;overflow:auto':''}" onclick="copyText(${JSON.stringify(text)})">${esc(text || 'Not available')}</div>
+  </div>`;
+}
+
+function renderDailyPin(p) {
+  const title = p.pin_title || p.title || p.asin;
+  const description = p.pin_description || '';
+  const link = p.pin_link || p.affiliate_link || p.manual_link || '';
+  const board = p.pin_board || p.board_suggested || 'Best Tech Gadgets India';
+  const alt = p.pin_alt_text || p.title || title;
+  const img = p.image_url || '';
+  const price = p.price ? `Rs. ${Number(p.price).toLocaleString('en-IN')}` : 'Check price';
+  return `<article class="daily-pin">
+    <div class="daily-pin-head">
+      ${img ? `<img class="daily-img" src="${esc(img)}" alt="${esc(alt)}" onerror="this.outerHTML='<div class=&quot;daily-img daily-img-empty&quot;>1000x1500</div>'">` : `<div class="daily-img daily-img-empty">1000x1500</div>`}
+      <div>
+        <div class="daily-title">${esc(title)}</div>
+        <div class="daily-meta">
+          <span class="tag ${p.has_affiliate?'tag-green':'tag-amber'}">${p.has_affiliate?'affiliate':'manual'}</span>
+          <span class="tag tag-blue">${esc(price)}</span>
+          ${p.status ? `<span class="tag tag-gray">${esc(p.status)}</span>` : ''}
+        </div>
+        <div class="compact-note" style="margin-top:8px">ASIN: <span class="td-mono">${esc(p.asin || 'N/A')}</span></div>
+        ${p.failure_reason ? `<div class="compact-note" style="color:var(--amber)">Fallback: ${esc(p.failure_reason)}</div>` : ''}
+      </div>
+    </div>
+    ${copyBlock('Title', title)}
+    ${copyBlock('Description', description, true)}
+    ${copyBlock('Destination URL', link)}
+    ${copyBlock('Board', board)}
+    ${copyBlock('Alt Text', alt, true)}
+    ${copyBlock('Image Path', p.image_path || p.image_url || 'Use generated 1000x1500 image from output/images', true)}
+    <div class="copy-field">
+      <div class="copy-label">Manual Affiliate Backup</div>
+      <div class="field-actions">
+        ${p.sitestripe_url ? `<a class="btn btn-amber btn-sm" href="${esc(p.sitestripe_url)}" target="_blank">Open SiteStripe</a>` : ''}
+        ${p.manual_link ? `<button class="btn btn-outline btn-sm" onclick="copyText(${JSON.stringify(p.manual_link)})">Copy Manual Link</button>` : ''}
+      </div>
+    </div>
+  </article>`;
 }
 
 // ── Posted Pins ──────────────────────────────────────────────
@@ -803,7 +998,7 @@ function generateEnv() {
     `GEMINI_API_KEY=${document.getElementById('s-gemini').value||''}`,
     `TELEGRAM_BOT_TOKEN=${document.getElementById('s-tg-token').value||''}`,
     `TELEGRAM_CHAT_ID=${document.getElementById('s-tg-chat').value||''}`,
-    'MAX_PINS_PER_DAY=15',
+    'MAX_PINS_PER_DAY=8',
     'MIN_DELAY_SEC=180',
     'MAX_DELAY_SEC=420',
   ];
@@ -849,7 +1044,18 @@ function renderLogs() {
 
 // ── Utils ────────────────────────────────────────────────────
 function copyText(text) {
-  navigator.clipboard.writeText(text).then(()=>{
+  const write = navigator.clipboard?.writeText
+    ? navigator.clipboard.writeText(text)
+    : new Promise(resolve => {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+        resolve();
+      });
+  write.then(()=>{
     const el = document.createElement('div');
     el.textContent = '✅ Copied!';
     el.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#2ecc71;color:#0b0d12;padding:10px 18px;border-radius:8px;font-weight:700;font-size:13px;z-index:9999;animation:fadeout 2s forwards';
@@ -860,6 +1066,9 @@ function copyText(text) {
 
 // ── Init ─────────────────────────────────────────────────────
 refreshAll();
+loadDataFiles();
+const initialPage = location.hash.replace('#','');
+if (['dashboard','pipeline','products','daywise','pins','settings','logs'].includes(initialPage)) nav(initialPage);
 setInterval(refreshAll, 30000);
 </script>
 </body>
