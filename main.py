@@ -71,7 +71,7 @@ def run_pipeline(dry_run: bool = False, amazon_urls: list[str] | None = None):
         products = fetch_products_from_urls(amazon_urls) if amazon_urls else (fetch_products(keywords) or load_products())
         if not products:
             logger.error("No products — aborting"); return
-        logger.info(f"  {len(products)} gadget products ready | CSV saved")
+        logger.info(f"  {len(products)} trend-ranked products ready | CSV saved")
     except Exception as e:
         notify_error("M2 Products", str(e)); record_error(); return
 
@@ -196,7 +196,7 @@ if __name__ == "__main__":
         fetch_trends()
     elif args.products:
         prods = fetch_products_from_urls(args.amazon_url) if args.amazon_url else fetch_products(load_trends())
-        notify_batch_done(0, 0, prods[:5])
+        logger.info(f"Manual daily product feed ready: {len(prods)} products")
     elif args.summary:
         if os.path.exists(DAILY_STATS):
             with open(DAILY_STATS) as f:

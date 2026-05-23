@@ -301,13 +301,14 @@ textarea{resize:vertical;min-height:70px}
 <!-- ══ DAY-WISE PINS ══ -->
 <div class="page" id="page-daywise">
   <div class="page-hdr">
-    <div><div class="page-title">Daily Pins Board</div><div class="page-sub">Pinterest-ready cards from data/pinterest_pins.csv or products.csv</div></div>
+    <div><div class="page-title">Daily Pinterest Queue</div><div class="page-sub">30 fresh trend-ranked products with copy-ready Pinterest and Google SEO fields</div></div>
     <div class="pin-toolbar">
       <input class="file-input" type="file" id="pin-csv-input" accept=".csv" onchange="importPinsCSV(event)">
       <button class="btn btn-green btn-sm" onclick="document.getElementById('pin-csv-input').click()">Import CSV</button>
       <button class="btn btn-outline btn-sm" onclick="loadDataFiles()">Load data/ CSV</button>
       <button class="btn btn-blue btn-sm" onclick="generateDaywise()">Refresh Board</button>
       <button class="btn btn-amber btn-sm" onclick="downloadPinterestCSV()">Download Pin CSV</button>
+      <a class="btn btn-outline btn-sm" href="data/pinterest_bulk_editor.csv" download>Bulk Editor CSV</a>
     </div>
   </div>
   <div class="three-col">
@@ -324,10 +325,10 @@ textarea{resize:vertical;min-height:70px}
       <div style="background:var(--s2);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:3px">LINK</div><div style="font-size:12px">Affiliate or manual Amazon link</div></div>
       <div style="background:var(--s2);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:3px">PRODUCT URL</div><div style="font-size:12px">Exact Amazon product page</div></div>
       <div style="background:var(--s2);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:3px">IMAGE</div><div style="font-size:12px">1000×1500px JPEG</div></div>
-      <div style="background:var(--s2);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:3px">BOARD</div><div style="font-size:12px">Best Tech Gadgets India</div></div>
+      <div style="background:var(--s2);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:3px">BOARD</div><div style="font-size:12px">Auto-suggested by trend category</div></div>
       <div style="background:var(--s2);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:3px">ALT TEXT</div><div style="font-size:12px">Product description for SEO</div></div>
     </div>
-    <div class="data-source" id="csv-source-label">Waiting for generated CSV. You can import data/pinterest_pins.csv from a workflow artifact.</div>
+    <div class="data-source" id="csv-source-label">Waiting for generated CSV. Live page loads data/products.csv automatically.</div>
   </div>
   <div id="daywise-container"></div>
 </div>
@@ -512,13 +513,14 @@ function normalizeSiteStripeUrl(value, asin, manualLink) {
 }
 
 function normalizePinRow(row) {
-  const asin = row.ASIN || row.asin || '';
-  const title = row.Title || row.pin_title || row.title || '';
-  const description = row.Description || row.pin_description || '';
+  const asinFromMedia = String(row['Media File Name'] || '').match(/[A-Z0-9]{10}/)?.[0] || '';
+  const asin = row.ASIN || row.asin || asinFromMedia || '';
+  const title = row.Title || row['Pin Title'] || row.pin_title || row.title || '';
+  const description = row.Description || row['Pin Description'] || row.pin_description || '';
   const affiliate = row['Affiliate Link'] || row.affiliate_link || '';
   const manual = row['Exact Product URL'] || row.product_url || row['Manual Link'] || row.manual_link || (asin ? `https://www.amazon.in/dp/${asin}` : '');
-  const link = row['Destination URL'] || row.pin_link || affiliate || manual;
-  const board = row.Board || row.pin_board || row.board_suggested || 'Best Tech Gadgets India';
+  const link = row['Destination URL'] || row['Promoted Pin URL'] || row['Organic Pin URL'] || row.pin_link || affiliate || manual;
+  const board = row.Board || row.pin_board || row.board_suggested || 'Viral Amazon Finds';
   const image = row['Image URL'] || row.image_url || '';
   const imagePath = row['Image Path'] || row.image_path || '';
   const hasAffiliate = String(row.has_affiliate ?? '').toLowerCase() === 'true' || !!affiliate || (link && link.includes('tag='));
@@ -529,6 +531,11 @@ function normalizePinRow(row) {
     rating: row.rating || '',
     reviews: row.reviews || '',
     keyword: row.keyword || '',
+    trend_label: row.trend_label || row['Trend Label'] || '',
+    seo_keyword: row.seo_keyword || row.keyword || row['Keyword (Match Type BROAD)'] || row['Ad Group Keyword (Match Type BROAD)'] || '',
+    google_title: row.google_title || row['Google Title'] || title,
+    google_description: row.google_description || row['Google Description'] || description,
+    product_score: row.product_score || '',
     image_url: image,
     image_path: imagePath,
     has_affiliate: hasAffiliate,
@@ -630,7 +637,7 @@ setInterval(updateDate, 1000); updateDate();
 function refreshAll() {
   const today = new Date().toISOString().split('T')[0];
   const ts = statsData[today] || {pins_posted:0,errors:0};
-  const max = 8;
+  const max = 30;
   const pct = Math.min(100, Math.round(ts.pins_posted/max*100));
   const affCount = products.filter(p=>p.has_affiliate).length;
   const manCount = products.filter(p=>!p.has_affiliate).length;
@@ -854,7 +861,8 @@ function filterProducts() { renderProducts(); }
 function downloadCSV() {
   const fields = ['asin','title','price','currency','rating','reviews','keyword',
     'has_affiliate','product_url','affiliate_link','manual_link','sitestripe_url',
-    'pin_title','pin_description','pin_link','board_suggested','image_url','fetched_at'];
+    'trend_label','seo_keyword','google_title','google_description','product_score',
+    'pin_title','pin_description','pin_link','pin_board','board_suggested','image_url','fetched_at'];
   const rows = [fields.join(',')];
   products.forEach(p=>{
     rows.push(fields.map(f=>{
@@ -903,7 +911,7 @@ function downloadPinterestCSV() {
 // ── Day-wise Pins ────────────────────────────────────────────
 function generateDaywise() {
   const container = document.getElementById('daywise-container');
-  const maxPerDay = 8;
+  const maxPerDay = 30;
   const usable = products.filter(p => p.pin_title || p.title || p.asin);
   const days = Math.max(1, Math.ceil(usable.length / maxPerDay));
   let html = '';
@@ -951,6 +959,7 @@ function renderDailyPin(p) {
   const alt = p.pin_alt_text || p.title || title;
   const img = p.image_url || '';
   const price = p.price ? `Rs. ${Number(p.price).toLocaleString('en-IN')}` : 'Check price';
+  const score = p.product_score ? `Score ${Number(p.product_score).toFixed(0)}` : (p.trend_label || 'trend ranked');
   return `<article class="daily-pin">
     <div class="daily-pin-head">
       ${img ? `<img class="daily-img" src="${esc(img)}" alt="${esc(alt)}" onerror="this.outerHTML='<div class=&quot;daily-img daily-img-empty&quot;>1000x1500</div>'">` : `<div class="daily-img daily-img-empty">1000x1500</div>`}
@@ -959,6 +968,7 @@ function renderDailyPin(p) {
         <div class="daily-meta">
           <span class="tag ${p.has_affiliate?'tag-green':'tag-amber'}">${p.has_affiliate?'affiliate':'manual'}</span>
           <span class="tag tag-blue">${esc(price)}</span>
+          <span class="tag tag-purple">${esc(score)}</span>
           ${p.status ? `<span class="tag tag-gray">${esc(p.status)}</span>` : ''}
         </div>
         <div class="compact-note" style="margin-top:8px">ASIN: <span class="td-mono">${esc(p.asin || 'N/A')}</span></div>
@@ -967,6 +977,9 @@ function renderDailyPin(p) {
     </div>
     ${copyBlock('Title', title)}
     ${copyBlock('Description', description, true)}
+    ${copyBlock('Google SEO Title', p.google_title || title)}
+    ${copyBlock('Google SEO Description', p.google_description || description, true)}
+    ${copyBlock('Search Keyword', p.seo_keyword || p.keyword || '')}
     ${copyBlock('Destination URL', link)}
     ${copyBlock('Exact Amazon Product URL', p.product_url || p.manual_link || link)}
     ${copyBlock('Board', board)}
@@ -1018,7 +1031,7 @@ function generateEnv() {
     `GEMINI_API_KEY=${document.getElementById('s-gemini').value||''}`,
     `TELEGRAM_BOT_TOKEN=${document.getElementById('s-tg-token').value||''}`,
     `TELEGRAM_CHAT_ID=${document.getElementById('s-tg-chat').value||''}`,
-    'MAX_PINS_PER_DAY=8',
+    'MAX_PINS_PER_DAY=30',
     'MIN_DELAY_SEC=180',
     'MAX_DELAY_SEC=420',
   ];

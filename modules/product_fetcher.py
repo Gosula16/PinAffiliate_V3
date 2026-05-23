@@ -4,9 +4,11 @@ import json, logging, os, time, random, re, requests, csv
 from html import unescape
 from datetime import datetime, timedelta
 from urllib.parse import parse_qs, quote_plus, urlparse
-from config import (AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_PARTNER_TAG,
+from config import (AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_PARTNER_TAG, AMAZON_MARKETPLACE,
                     PRODUCTS_FILE, PRODUCTS_CSV, POSTED_LOG, DATA_DIR,
-                    MAX_PRODUCTS_PER_KW, ASIN_REPOST_DAYS, GADGET_KEYWORDS)
+                    MAX_PRODUCTS_PER_KW, DAILY_PRODUCT_COUNT, ASIN_REPOST_DAYS,
+                    GADGET_KEYWORDS)
+from modules.pinterest_bulk_csv import save_pinterest_bulk_csv
 
 logger = logging.getLogger("pinbot.products")
 
@@ -20,11 +22,11 @@ def _posted_asins():
 
 def _aff_link(asin):
     if AMAZON_PARTNER_TAG:
-        return f"https://www.amazon.in/dp/{asin}?tag={AMAZON_PARTNER_TAG}"
+        return f"https://{AMAZON_MARKETPLACE}/dp/{asin}?tag={AMAZON_PARTNER_TAG}"
     return None
 
 def _manual_link(asin):
-    return f"https://www.amazon.in/dp/{asin}"
+    return f"https://{AMAZON_MARKETPLACE}/dp/{asin}"
 
 def _sitestripe(asin):
     # SiteStripe appears on the Amazon product page when the Associate is logged in.
@@ -32,12 +34,74 @@ def _sitestripe(asin):
     return _manual_link(asin)
 
 def _search_url(keyword):
-    return f"https://www.amazon.in/s?k={quote_plus(keyword)}&i=electronics"
+    return f"https://{AMAZON_MARKETPLACE}/s?k={quote_plus(keyword)}"
 
 
 def _clean_html(value: str) -> str:
     value = re.sub(r"<[^>]+>", " ", value or "")
     return unescape(re.sub(r"\s+", " ", value)).strip()
+
+
+def _short_title(title: str, max_len: int = 64) -> str:
+    title = re.split(r"\s+[|(-]\s*", title)[0].strip() or title
+    title = re.sub(r"\b(with|for)\b.*$", "", title, flags=re.I).strip() or title
+    return title[:max_len].rstrip(" ,|-")
+
+
+def _display_keyword(keyword: str) -> str:
+    keyword = re.sub(r"^best\s+", "", keyword.strip(), flags=re.I)
+    return keyword.title()
+
+
+def _trend_label(keyword: str) -> str:
+    keyword = keyword.lower()
+    if any(word in keyword for word in ["viral", "tiktok", "pinterest", "aesthetic"]):
+        return "viral trend"
+    if any(word in keyword for word in ["best seller", "best sellers", "amazon"]):
+        return "best seller"
+    if any(word in keyword for word in ["under", "budget", "deal"]):
+        return "budget pick"
+    return "daily trend"
+
+
+def _review_count(value) -> int:
+    if value is None:
+        return 0
+    digits = re.sub(r"[^0-9]", "", str(value))
+    return int(digits) if digits else 0
+
+
+def _product_score(product: dict) -> float:
+    rating = float(product.get("rating") or 0)
+    reviews = _review_count(product.get("reviews"))
+    price = float(product.get("price") or 0)
+    score = rating * 18
+    score += min(35, reviews ** 0.5 / 3)
+    if product.get("image_url"):
+        score += 8
+    if product.get("has_affiliate"):
+        score += 5
+    if 499 <= price <= 4999:
+        score += 7
+    elif 5000 <= price <= 14999:
+        score += 3
+    elif price > 15000:
+        score -= 8
+    score += float(product.get("trend_score") or 0)
+    return round(score, 2)
+
+
+def _board_for_keyword(keyword: str) -> str:
+    kw = keyword.lower()
+    if any(w in kw for w in ["kitchen", "air fryer", "mixer", "vacuum", "home", "decor", "storage", "organ"]):
+        return "Trending Home Finds"
+    if any(w in kw for w in ["fitness", "gym", "workout", "trimmer", "self care", "beauty", "skincare"]):
+        return "Wellness Beauty And Fitness Finds"
+    if any(w in kw for w in ["travel", "backpack", "car"]):
+        return "Travel And Everyday Essentials"
+    if any(w in kw for w in ["desk", "office", "laptop", "phone", "tech", "gadget", "gaming"]):
+        return "Budget Tech And Desk Setup"
+    return "Viral Amazon Finds"
 
 
 def extract_asin(value: str) -> str | None:
@@ -69,6 +133,15 @@ def _build(asin, title, price, img, rating, reviews, keyword, source):
     manual = _manual_link(asin)
     kw   = keyword.lower()
     price_str = f"Rs. {int(price):,}" if price else "check listing"
+    short = _short_title(title)
+    board = _board_for_keyword(keyword)
+    display_kw = _display_keyword(keyword)
+    trend_label = _trend_label(keyword)
+    google_title = f"{short} | {display_kw} Price, Review And Deals"
+    google_description = (
+        f"{short} is a {trend_label} for {kw}. Compare current price, rating, "
+        f"features and exact Amazon product link before you buy."
+    )
     return {
         "asin":           asin,
         "title":          title,
@@ -88,16 +161,19 @@ def _build(asin, title, price, img, rating, reviews, keyword, source):
         "manual_link":    manual,
         "sitestripe_url": _sitestripe(asin),
         "search_url":     _search_url(keyword),
+        "trend_label":    trend_label,
+        "seo_keyword":    keyword,
+        "google_title":   google_title[:120],
+        "google_description": google_description[:220],
         # Pinterest ready fields
-        "pin_title":      f"Best {keyword.title()} India 2026 | Top Pick",
-        "pin_description":(f"Looking for the best {kw} in India? "
-                           f"This top-rated gadget is available for {price_str} on Amazon. "
-                           f"Check the link for full specs and today's lowest price! "
-                           f"#{kw.replace(' ','')} #amazonindia #gadgets #techindia"),
+        "pin_title":      f"{short} | {display_kw}"[:100],
+        "pin_description":(f"{short} is today's {trend_label} for {kw}. "
+                           f"Price: {price_str}. Check the exact product page for specs, reviews "
+                           f"and current offers. #{re.sub(r'[^a-z0-9]', '', kw)} #amazonfinds #dailyfinds #budgetshopping"),
         "pin_link":       aff or manual,
-        "pin_board":      "Best Tech Gadgets India",
+        "pin_board":      board,
         "pin_image_size": "1000x1500px",
-        "pin_alt_text":   f"{title} — available on Amazon India",
+        "pin_alt_text":   f"{title} available on Amazon",
     }
 
 
@@ -143,11 +219,13 @@ def fetch_products_from_urls(urls: list[str]) -> list[dict]:
             continue
         product = _product_page(asin, value)
         if product:
+            product["product_score"] = _product_score(product)
             products.append(product)
             seen.add(asin)
     with open(PRODUCTS_FILE, "w", encoding="utf-8") as f:
         json.dump({"fetched_at": datetime.now().isoformat(), "products": products}, f, indent=2, ensure_ascii=False)
     _save_csv(products)
+    save_pinterest_bulk_csv(products)
     return products
 
 
@@ -201,6 +279,8 @@ def _scrape(keyword, n):
             )
             title = _clean_html(title_match.group(1)) if title_match else keyword.title()
             title = title.rstrip(".")[:220]
+            if len(title) < 16 or len(title.split()) < 3:
+                continue
 
             price_match = re.search(r'a-price-whole">([0-9,]+)<', block)
             rating_match = re.search(r'([0-9.]+) out of 5', block)
@@ -226,25 +306,47 @@ def _scrape(keyword, n):
 def fetch_products(keywords=None):
     os.makedirs(DATA_DIR, exist_ok=True)
     posted = _posted_asins()
-    use_kw = GADGET_KEYWORDS  # always gadgets only
+    use_kw = []
+    for keyword in (keywords or []) + GADGET_KEYWORDS:
+        normalized = re.sub(r"\s+", " ", str(keyword)).strip()
+        if normalized and normalized.lower() not in {k.lower() for k in use_kw}:
+            use_kw.append(normalized)
 
     all_products, seen = [], set()
-    for kw in use_kw:
+    for trend_index, kw in enumerate(use_kw):
         logger.info(f"Fetching: {kw}")
         prods = _paapi(kw, MAX_PRODUCTS_PER_KW) or _scrape(kw, MAX_PRODUCTS_PER_KW)
         for p in prods:
             if p["asin"] not in posted and p["asin"] not in seen:
+                p["trend_score"] = max(0, 30 - trend_index)
+                p["product_score"] = _product_score(p)
                 seen.add(p["asin"])
                 all_products.append(p)
         time.sleep(random.uniform(1.0, 2.0))
 
+    ranked_products = sorted(
+        all_products,
+        key=lambda p: (p.get("product_score", 0), _review_count(p.get("reviews")), float(p.get("rating") or 0)),
+        reverse=True,
+    )
+    all_products, seen_titles = [], set()
+    for product in ranked_products:
+        title_key = re.sub(r"[^a-z0-9]+", " ", _short_title(product.get("title", ""), 52).lower()).strip()
+        if title_key in seen_titles:
+            continue
+        seen_titles.add(title_key)
+        all_products.append(product)
+        if len(all_products) >= DAILY_PRODUCT_COUNT:
+            break
+
     # Save JSON
-    with open(PRODUCTS_FILE, "w") as f:
+    with open(PRODUCTS_FILE, "w", encoding="utf-8") as f:
         json.dump({"fetched_at": datetime.now().isoformat(), "products": all_products}, f, indent=2, ensure_ascii=False)
 
     # Save CSV — all fields
     _save_csv(all_products)
-    logger.info(f"Saved {len(all_products)} gadgets | CSV + JSON written")
+    save_pinterest_bulk_csv(all_products)
+    logger.info(f"Saved {len(all_products)} trend-ranked products | CSV + JSON written")
     return all_products
 
 
@@ -252,7 +354,8 @@ def _save_csv(products):
     if not products: return
     fields = ["asin","title","price","currency","rating","reviews","keyword","category",
               "source","fetched_at","has_affiliate","product_url","affiliate_link","manual_link",
-              "sitestripe_url","search_url","pin_title","pin_description","pin_link",
+              "sitestripe_url","search_url","trend_label","seo_keyword","google_title","google_description",
+              "trend_score","product_score","pin_title","pin_description","pin_link",
               "pin_board","pin_image_size","pin_alt_text","image_url"]
     with open(PRODUCTS_CSV, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
@@ -263,5 +366,5 @@ def _save_csv(products):
 
 def load_products():
     if not os.path.exists(PRODUCTS_FILE): return []
-    with open(PRODUCTS_FILE) as f:
+    with open(PRODUCTS_FILE, encoding="utf-8") as f:
         return json.load(f).get("products", [])
