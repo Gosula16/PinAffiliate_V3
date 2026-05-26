@@ -308,9 +308,10 @@ textarea{resize:vertical;min-height:70px}
       <button class="btn btn-outline btn-sm" onclick="loadDataFiles()">Load data/ CSV</button>
       <button class="btn btn-blue btn-sm" onclick="generateDaywise()">Refresh Board</button>
       <button class="btn btn-amber btn-sm" onclick="downloadPinterestCSV()">Download Pin CSV</button>
-      <a class="btn btn-outline btn-sm" href="data/pinterest_bulk_editor.csv" download>Bulk Editor CSV</a>
+      <a class="btn btn-outline btn-sm" href="data/pinterest_bulk_editor.csv" download onclick="showToast('Opening bulk editor CSV...')">Bulk Editor CSV</a>
     </div>
   </div>
+  <div class="data-source" id="daywise-action-status">Ready.</div>
   <div class="three-col">
     <div class="stat-card"><div class="stat-label">Pins Ready</div><div class="stat-value" style="color:var(--green)" id="dw-ready">0</div><div class="stat-sub">copy-ready cards</div></div>
     <div class="stat-card"><div class="stat-label">Days Filled</div><div class="stat-value" style="color:var(--blue)" id="dw-days">0</div><div class="stat-sub">daily groups</div></div>
@@ -583,6 +584,7 @@ function localDateKey(date = new Date()) {
 }
 
 async function loadDataFiles() {
+  setActionStatus('Loading dashboard CSV files...');
   const pinCsv = await fetchTextIfExists('data/pinterest_pins.csv');
   if (pinCsv) {
     products = parseCSV(pinCsv).map(normalizePinRow).filter(p => p.pin_title || p.title || p.asin);
@@ -610,7 +612,9 @@ async function loadDataFiles() {
   store.set('pinbot_stats', statsData);
   store.set('pinbot_log', postedLog);
   refreshAll();
-  if (document.getElementById('page-daywise').classList.contains('active')) generateDaywise();
+  if (document.getElementById('page-daywise').classList.contains('active')) generateDaywise(false);
+  setActionStatus(`Loaded ${products.length} pins from ${dashboardSource}.`);
+  showToast(`Loaded ${products.length} pins`);
 }
 
 function importPinsCSV(event) {
@@ -624,6 +628,8 @@ function importPinsCSV(event) {
     store.set('pinbot_source', dashboardSource);
     refreshAll();
     generateDaywise();
+    setActionStatus(`Imported ${products.length} pins from ${file.name}.`);
+    showToast(`Imported ${products.length} pins`);
   };
   reader.readAsText(file);
 }
@@ -906,11 +912,7 @@ function downloadCSV() {
       return `"${String(v).replace(/"/g,'""')}"`;
     }).join(','));
   });
-  const blob = new Blob([rows.join('\n')], {type:'text/csv'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `PinAffiliateBot_Products_${new Date().toISOString().split('T')[0]}.csv`;
-  a.click();
+  saveCsvFile(rows.join('\n'), `PinAffiliateBot_Products_${localDateKey()}.csv`);
 }
 
 function downloadPinterestCSV() {
@@ -937,15 +939,33 @@ function downloadPinterestCSV() {
     };
     rows.push(fields.map(f => `"${String(row[f] ?? '').replace(/"/g,'""')}"`).join(','));
   });
-  const blob = new Blob([rows.join('\n')], {type:'text/csv'});
+  saveCsvFile(rows.join('\n'), `PinAffiliateBot_Pinterest_Pins_${localDateKey()}.csv`);
+}
+
+function saveCsvFile(csvText, filename) {
+  if (!csvText || csvText.split('\n').length <= 1) {
+    showToast('No CSV rows available yet', 'warn');
+    setActionStatus('No CSV rows available yet. Load data first.');
+    return;
+  }
+  const blob = new Blob([csvText], {type:'text/csv;charset=utf-8'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `PinAffiliateBot_Pinterest_Pins_${new Date().toISOString().split('T')[0]}.csv`;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
   a.click();
+  setTimeout(() => {
+    URL.revokeObjectURL(a.href);
+    a.remove();
+  }, 1000);
+  setActionStatus(`${filename} download started. CSV also copied as a backup when browser permissions allow it.`);
+  showToast('CSV download started');
+  copyText(csvText, 'CSV copied as backup', false);
 }
 
 // ── Day-wise Pins ────────────────────────────────────────────
-function generateDaywise() {
+function generateDaywise(showFeedback=true) {
   const container = document.getElementById('daywise-container');
   const maxPerDay = 30;
   const usable = products.filter(p => p.pin_title || p.title || p.asin);
@@ -977,6 +997,8 @@ function generateDaywise() {
   container.innerHTML = html || `<div class="card compact-note">
     No real Amazon products loaded yet. Import the GitHub Actions <strong>pinbot-csv</strong> artifact, or run the bot to create <strong>data/pinterest_pins.csv</strong>. Fake demo links are hidden so you do not copy invalid Amazon URLs.
   </div>`;
+  setActionStatus(`Board refreshed: ${usable.length} pins across ${usable.length ? days : 0} day(s).`);
+  if (showFeedback) showToast('Board refreshed');
 }
 
 function copyBlock(label, value, compact=false) {
@@ -1112,7 +1134,21 @@ function renderLogs() {
 }
 
 // ── Utils ────────────────────────────────────────────────────
-function copyText(text) {
+function setActionStatus(message) {
+  const el = document.getElementById('daywise-action-status');
+  if (el) el.textContent = message;
+}
+
+function showToast(message, tone='ok') {
+  const el = document.createElement('div');
+  el.textContent = message;
+  const bg = tone === 'warn' ? '#f39c12' : '#2ecc71';
+  el.style.cssText = `position:fixed;bottom:24px;right:24px;background:${bg};color:#0b0d12;padding:10px 18px;border-radius:8px;font-weight:700;font-size:13px;z-index:9999;box-shadow:0 8px 30px rgba(0,0,0,.35)`;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(), 2200);
+}
+
+function copyText(text, successMessage='Copied!', showSuccess=true) {
   const write = navigator.clipboard?.writeText
     ? navigator.clipboard.writeText(text)
     : new Promise(resolve => {
@@ -1125,11 +1161,14 @@ function copyText(text) {
         resolve();
       });
   write.then(()=>{
+    if (!showSuccess) return;
     const el = document.createElement('div');
-    el.textContent = '✅ Copied!';
+    el.textContent = successMessage;
     el.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#2ecc71;color:#0b0d12;padding:10px 18px;border-radius:8px;font-weight:700;font-size:13px;z-index:9999;animation:fadeout 2s forwards';
     document.body.appendChild(el);
     setTimeout(()=>el.remove(), 2000);
+  }).catch(() => {
+    if (showSuccess) showToast('Copy blocked by browser permissions', 'warn');
   });
 }
 
