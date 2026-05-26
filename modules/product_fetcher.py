@@ -179,7 +179,7 @@ def _build(asin, title, price, img, rating, reviews, keyword, source):
 
 def _product_page(asin: str, source_url: str | None = None) -> dict | None:
     """Build a product record from a direct Amazon URL/ASIN."""
-    url = source_url or _manual_link(asin)
+    url = source_url if source_url and source_url.startswith(("http://", "https://")) else _manual_link(asin)
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",

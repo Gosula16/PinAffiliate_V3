@@ -10,6 +10,14 @@ logger = logging.getLogger("pinbot.poster")
 PINTEREST_API = "https://api.pinterest.com/v5"
 
 
+def pinterest_config_status() -> tuple[bool, str]:
+    if not PINTEREST_TOKEN:
+        return False, "Pinterest access token missing"
+    if not any(PINTEREST_BOARDS.values()):
+        return False, "Pinterest board IDs missing"
+    return True, ""
+
+
 def _headers():
     return {
         "Authorization": f"Bearer {PINTEREST_TOKEN}",
@@ -145,17 +153,12 @@ def post_batch(products_with_data: list[dict]) -> list[dict]:
     products_with_data: list of {product, image_path, caption}
     Returns list of successfully posted pin results.
     """
-    if not PINTEREST_TOKEN:
-        logger.warning("No Pinterest token - writing manual fallback CSV without delays")
+    ready, reason = pinterest_config_status()
+    if not ready:
+        logger.warning(f"{reason} - writing manual fallback CSV without delays")
         return {
             "posted": [],
-            "failed": [{**item, "failure_reason": "Pinterest token missing"} for item in products_with_data],
-        }
-    if not any(PINTEREST_BOARDS.values()):
-        logger.warning("No Pinterest boards configured - writing manual fallback CSV without delays")
-        return {
-            "posted": [],
-            "failed": [{**item, "failure_reason": "Pinterest board IDs missing"} for item in products_with_data],
+            "failed": [{**item, "failure_reason": reason} for item in products_with_data],
         }
 
     posted = []

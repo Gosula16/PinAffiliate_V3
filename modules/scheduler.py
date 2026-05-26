@@ -35,6 +35,10 @@ def record_pins_posted(count: int):
     if today not in stats:
         stats[today] = {"pins_posted": 0, "errors": 0}
     stats[today]["pins_posted"] += count
+    stats[today]["pins_ready"] = 0
+    stats[today].pop("manual_csv", None)
+    stats[today].pop("fallback_reason", None)
+    stats[today]["updated_at"] = datetime.now().isoformat()
     with open(DAILY_STATS, "w") as f:
         json.dump(stats, f, indent=2)
 
@@ -49,6 +53,23 @@ def record_error():
     if today not in stats:
         stats[today] = {"pins_posted": 0, "errors": 0}
     stats[today]["errors"] += 1
+    with open(DAILY_STATS, "w") as f:
+        json.dump(stats, f, indent=2)
+
+
+def record_manual_fallback(count: int, csv_path: str = "", reason: str = ""):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    stats = {}
+    if os.path.exists(DAILY_STATS):
+        with open(DAILY_STATS) as f:
+            stats = json.load(f)
+    today = date.today().isoformat()
+    if today not in stats:
+        stats[today] = {"pins_posted": 0, "errors": 0}
+    stats[today]["pins_ready"] = count
+    stats[today]["manual_csv"] = csv_path
+    stats[today]["fallback_reason"] = reason
+    stats[today]["updated_at"] = datetime.now().isoformat()
     with open(DAILY_STATS, "w") as f:
         json.dump(stats, f, indent=2)
 

@@ -565,6 +565,23 @@ async function fetchTextIfExists(path) {
   }
 }
 
+async function fetchJsonIfExists(path) {
+  const text = await fetchTextIfExists(path);
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function localDateKey(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 async function loadDataFiles() {
   const pinCsv = await fetchTextIfExists('data/pinterest_pins.csv');
   if (pinCsv) {
@@ -577,8 +594,21 @@ async function loadDataFiles() {
       dashboardSource = 'data/products.csv';
     }
   }
+
+  const generatedStats = await fetchJsonIfExists('data/daily_stats.json');
+  if (generatedStats && typeof generatedStats === 'object') {
+    statsData = generatedStats;
+  }
+
+  const generatedLog = await fetchJsonIfExists('data/posted_log.json');
+  if (Array.isArray(generatedLog)) {
+    postedLog = generatedLog;
+  }
+
   store.set('pinbot_products', products);
   store.set('pinbot_source', dashboardSource);
+  store.set('pinbot_stats', statsData);
+  store.set('pinbot_log', postedLog);
   refreshAll();
   if (document.getElementById('page-daywise').classList.contains('active')) generateDaywise();
 }
@@ -635,12 +665,13 @@ setInterval(updateDate, 1000); updateDate();
 
 // ── Refresh Dashboard ────────────────────────────────────────
 function refreshAll() {
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDateKey();
   const ts = statsData[today] || {pins_posted:0,errors:0};
   const max = 30;
   const pct = Math.min(100, Math.round(ts.pins_posted/max*100));
   const affCount = products.filter(p=>p.has_affiliate).length;
   const manCount = products.filter(p=>!p.has_affiliate).length;
+  const pinsReady = Number(ts.pins_ready || 0);
 
   document.getElementById('s-today').textContent = ts.pins_posted;
   document.getElementById('s-total').textContent = postedLog.length;
@@ -672,6 +703,11 @@ function refreshAll() {
   // Recent table
   const tbody = document.getElementById('recent-body');
   const recent = [...postedLog].reverse().slice(0,6);
+  if (!recent.length && pinsReady > 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">${pinsReady} manual pins ready in ${esc(ts.manual_csv || 'data/pinterest_pins.csv')} - ${esc(ts.fallback_reason || 'manual posting fallback')}</td></tr>`;
+    document.getElementById('recent-badge').textContent = pinsReady;
+    return;
+  }
   if (!recent.length) {
     tbody.innerHTML = `<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">No activity yet — run pipeline</td></tr>`;
   } else {
@@ -1063,7 +1099,7 @@ function renderLogs() {
     return `<div><span class="log-time">${l.split(']')[0]}]</span> <span class="${cls}">${l.split('] ').slice(1).join('] ')}</span></div>`;
   }).join('');
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDateKey();
   const entries = Object.entries(statsData).reverse();
   const tbody = document.getElementById('stats-body');
   tbody.innerHTML = entries.length ? entries.map(([date,s])=>`<tr>

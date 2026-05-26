@@ -1,4 +1,4 @@
-name: PinAffiliateBot Daily Product Feed
+name: PinAffiliateBot Morning Publish
 
 on:
   schedule:
@@ -9,8 +9,10 @@ permissions:
   contents: write
 
 jobs:
-  refresh-products:
+  morning-publish:
     runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Kolkata
 
     steps:
       - name: Checkout repo
@@ -24,22 +26,34 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Generate 30 daily trending products
+      - name: Run morning publish or fallback CSV
         env:
           AMAZON_ACCESS_KEY:   ${{ secrets.AMAZON_ACCESS_KEY }}
           AMAZON_SECRET_KEY:   ${{ secrets.AMAZON_SECRET_KEY }}
           AMAZON_PARTNER_TAG:  ${{ secrets.AMAZON_PARTNER_TAG }}
+          PINTEREST_ACCESS_TOKEN: ${{ secrets.PINTEREST_ACCESS_TOKEN }}
+          BOARD_TECH:          ${{ secrets.BOARD_TECH }}
+          BOARD_HOME:          ${{ secrets.BOARD_HOME }}
+          BOARD_FITNESS:       ${{ secrets.BOARD_FITNESS }}
+          BOARD_DEALS:         ${{ secrets.BOARD_DEALS }}
+          GEMINI_API_KEY:      ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN:  ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
           DAILY_PRODUCT_COUNT: '30'
           MAX_PRODUCTS_PER_KW: '5'
-        run: python main.py --products
+          MAX_PINS_PER_DAY: '30'
+        run: python main.py --scheduled-run
 
-      - name: Commit refreshed product feed
+      - name: Commit refreshed dashboard data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/products.csv data/pinterest_bulk_editor.csv
-          git add -f data/trends.json
-          git diff --cached --quiet || git commit -m "Refresh daily product feed"
+          git add data/products.csv data/pinterest_bulk_editor.csv data/daily_stats.json
+          test ! -f data/pinterest_pins.csv || git add data/pinterest_pins.csv
+          test ! -f data/posted_log.json || git add data/posted_log.json
+          test ! -f data/trends.json || git add -f data/trends.json
+          test ! -d output/images || git add -f output/images/
+          git diff --cached --quiet || git commit -m "Run morning Pinterest publish path"
           git push
 
       - name: Upload logs as artifact
@@ -50,13 +64,17 @@ jobs:
           path: logs/
           retention-days: 7
 
-      - name: Upload product CSV
+      - name: Upload morning publish outputs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pinbot-csv-${{ github.run_number }}
+          name: pinbot-morning-output-${{ github.run_number }}
           path: |
             data/products.csv
+            data/pinterest_pins.csv
             data/pinterest_bulk_editor.csv
             data/trends.json
+            data/daily_stats.json
+            data/posted_log.json
+            output/images/
           retention-days: 7
