@@ -1175,9 +1175,10 @@ function copyText(text, successMessage='Copied!', showSuccess=true) {
 
 // ── Init ─────────────────────────────────────────────────────
 refreshAll();
-loadDataFiles();
 const initialPage = location.hash.replace('#','');
-if (['dashboard','pipeline','products','daywise','pins','settings','logs'].includes(initialPage)) nav(initialPage);
+loadDataFiles().then(() => {
+  if (['dashboard','pipeline','products','daywise','pins','settings','logs'].includes(initialPage)) nav(initialPage);
+});
 setInterval(refreshAll, 30000);
 </script>
 </body>

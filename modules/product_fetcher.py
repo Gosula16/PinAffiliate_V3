@@ -343,6 +343,18 @@ def fetch_products(keywords=None):
         logger.warning("No fresh products found; keeping the last good product feed")
         return []
 
+    if len(all_products) < DAILY_PRODUCT_COUNT:
+        cached = load_products_csv()
+        seen_asins = {product.get("asin") for product in all_products}
+        for product in cached:
+            if product.get("asin") in seen_asins:
+                continue
+            all_products.append(product)
+            seen_asins.add(product.get("asin"))
+            if len(all_products) >= DAILY_PRODUCT_COUNT:
+                break
+        logger.info(f"Filled product queue to {len(all_products)} using cached products")
+
     # Save JSON
     with open(PRODUCTS_FILE, "w", encoding="utf-8") as f:
         json.dump({"fetched_at": datetime.now().isoformat(), "products": all_products}, f, indent=2, ensure_ascii=False)
