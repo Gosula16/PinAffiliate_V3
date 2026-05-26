@@ -1,0 +1,10 @@
+{
+  "2026-05-26": {
+    "pins_posted": 0,
+    "errors": 0,
+    "pins_ready": 8,
+    "manual_csv": "/home/runner/work/PinAffiliateBot_V3/PinAffiliateBot_V3/data/pinterest_pins.csv",
+    "fallback_reason": "Pinterest access token missing",
+    "updated_at": "2026-05-26T21:41:57.371375"
+  }
+}
