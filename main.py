@@ -3,6 +3,11 @@
 import logging, os, sys, json, time, random
 from datetime import datetime
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 os.makedirs("logs", exist_ok=True)
 os.makedirs("data", exist_ok=True)
 os.makedirs("output/images", exist_ok=True)
@@ -19,22 +24,41 @@ logger = logging.getLogger("pinbot.main")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from modules.trend_engine    import load_trends, fetch_trends
-from modules.product_fetcher import fetch_products, load_products
+from modules.product_fetcher import fetch_products, fetch_products_from_urls, load_products
 from modules.image_generator import generate_pin_image
 from modules.caption_writer  import generate_caption
-from modules.pin_poster      import post_batch
+from modules.pin_poster      import post_batch, pinterest_config_status
+from modules.pinterest_csv   import save_pinterest_csv
 from modules.board_rotation  import queue_rotation, get_due_rotations, mark_rotation_done
 from modules.notifier        import (notify_startup, notify_product_pin,
                                      notify_batch_done, notify_daily_summary,
-                                     notify_error, notify_token_expired)
+                                     notify_error, notify_token_expired,
+                                     notify_manual_csv)
 from modules.scheduler       import (is_posting_window, get_pins_posted_today,
-                                     record_pins_posted, record_error, wait_for_next_window)
-from config import MAX_PINS_PER_DAY, DAILY_STATS, PRODUCTS_CSV
+                                     record_pins_posted, record_error,
+                                     record_manual_fallback, wait_for_next_window)
+from config import MAX_PINS_PER_DAY, POST_WINDOWS, DAILY_STATS, PRODUCTS_CSV
 
 
-def run_pipeline(dry_run: bool = False):
+def _fallback_csv(batch_items: list[dict], status: str, reason: str) -> str | None:
+    csv_path = save_pinterest_csv(batch_items, status=status, failure_reason=reason)
+    if csv_path:
+        record_manual_fallback(len(batch_items), csv_path, reason)
+        logger.info(f"Pinterest-ready fallback CSV saved: {csv_path}")
+        notify_manual_csv(csv_path, len(batch_items), reason)
+    return csv_path
+
+
+def _scheduled_batch_size(in_window: bool, window_pins: int, remaining: int) -> int:
+    if in_window and window_pins:
+        return min(window_pins, remaining)
+    return min(POST_WINDOWS[0]["pins"], remaining)
+
+
+def run_pipeline(dry_run: bool = False, amazon_urls: list[str] | None = None,
+                 wait_for_window: bool = True, scheduled_run: bool = False):
     logger.info("=" * 60)
-    logger.info(f"PinAffiliateBot | dry_run={dry_run} | {datetime.now()}")
+    logger.info(f"PinAffiliateBot | dry_run={dry_run} | scheduled_run={scheduled_run} | {datetime.now()}")
     logger.info("=" * 60)
     notify_startup()
 
@@ -47,16 +71,24 @@ def run_pipeline(dry_run: bool = False):
 
     # ── Window check ─────────────────────────────────────────
     in_window, window_pins = is_posting_window()
-    if not in_window and not dry_run:
+    if not in_window and not dry_run and wait_for_window:
         wait_for_next_window()
         in_window, window_pins = is_posting_window()
-    batch_size = min(window_pins, remaining)
+    if dry_run and not in_window:
+        window_pins = max(w["pins"] for w in POST_WINDOWS)
+    if scheduled_run and not wait_for_window:
+        batch_size = _scheduled_batch_size(in_window, window_pins, remaining)
+    else:
+        batch_size = min(window_pins, remaining)
+    if batch_size <= 0:
+        logger.warning("No posting window is active; run with --scheduled-run to prepare the morning batch without waiting")
+        return
     logger.info(f"Batch size: {batch_size} pins")
 
     # ── M1: Trends ───────────────────────────────────────────
     logger.info("── M1: Trends ──")
     try:
-        keywords = load_trends()
+        keywords = [] if amazon_urls else load_trends()
         logger.info(f"  {len(keywords)} keywords ready")
     except Exception as e:
         notify_error("M1 Trends", str(e)); record_error(); return
@@ -64,10 +96,10 @@ def run_pipeline(dry_run: bool = False):
     # ── M2: Products ─────────────────────────────────────────
     logger.info("── M2: Products ──")
     try:
-        products = fetch_products(keywords) or load_products()
+        products = fetch_products_from_urls(amazon_urls) if amazon_urls else (fetch_products(keywords) or load_products())
         if not products:
             logger.error("No products — aborting"); return
-        logger.info(f"  {len(products)} gadget products ready | CSV saved")
+        logger.info(f"  {len(products)} trend-ranked products ready | CSV saved")
     except Exception as e:
         notify_error("M2 Products", str(e)); record_error(); return
 
@@ -99,13 +131,24 @@ def run_pipeline(dry_run: bool = False):
 
     # ── Dry run exit ─────────────────────────────────────────
     if dry_run:
+        csv_path = save_pinterest_csv(batch_items, status="dry_run")
+        if csv_path:
+            logger.info(f"Pinterest-ready CSV saved: {csv_path}")
         logger.info("DRY RUN — skipping post. Check output/images/")
         return
 
     # ── M5: Post ─────────────────────────────────────────────
     logger.info("── M5: Posting to Pinterest ──")
     try:
-        posted = post_batch(batch_items)
+        config_ready, config_reason = pinterest_config_status()
+        if not config_ready:
+            _fallback_csv(batch_items, status="manual_fallback", reason=config_reason)
+            logger.info("Pinterest credentials are not configured; skipped API posting and prepared manual CSV")
+            return
+
+        result = post_batch(batch_items)
+        posted = result["posted"]
+        failed = result["failed"]
         record_pins_posted(len(posted))
         logger.info(f"  {len(posted)}/{len(batch_items)} pins posted")
 
@@ -126,6 +169,10 @@ def run_pipeline(dry_run: bool = False):
             total     = get_pins_posted_today(),
             products  = [item["product"] for item in batch_items],
         )
+
+        if failed:
+            csv_path = _fallback_csv(failed, status="failed", reason="Pinterest API post failed")
+            logger.warning(f"{len(failed)} pins need manual posting. CSV: {csv_path}")
 
     except Exception as e:
         if "401" in str(e):
@@ -175,13 +222,16 @@ if __name__ == "__main__":
     p.add_argument("--trends",   action="store_true", help="Refresh trends only")
     p.add_argument("--products", action="store_true", help="Fetch products only")
     p.add_argument("--summary",  action="store_true", help="Send Telegram daily summary")
+    p.add_argument("--scheduled-run", action="store_true",
+                   help="Run one scheduled batch without sleeping; post if Pinterest is configured, otherwise save fallback CSV")
+    p.add_argument("--amazon-url", action="append", default=[], help="Amazon product URL/ASIN to pin; repeat for more")
     args = p.parse_args()
 
     if args.trends:
         fetch_trends()
     elif args.products:
-        prods = fetch_products(load_trends())
-        notify_batch_done(0, 0, prods[:5])
+        prods = fetch_products_from_urls(args.amazon_url) if args.amazon_url else fetch_products(load_trends())
+        logger.info(f"Manual daily product feed ready: {len(prods)} products")
     elif args.summary:
         if os.path.exists(DAILY_STATS):
             with open(DAILY_STATS) as f:
@@ -189,4 +239,9 @@ if __name__ == "__main__":
     elif args.loop:
         run_scheduler_loop()
     else:
-        run_pipeline(dry_run=args.dry_run)
+        run_pipeline(
+            dry_run=args.dry_run,
+            amazon_urls=args.amazon_url,
+            wait_for_window=not args.scheduled_run,
+            scheduled_run=args.scheduled_run,
+        )

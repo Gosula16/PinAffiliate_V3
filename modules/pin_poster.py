@@ -10,6 +10,14 @@ logger = logging.getLogger("pinbot.poster")
 PINTEREST_API = "https://api.pinterest.com/v5"
 
 
+def pinterest_config_status() -> tuple[bool, str]:
+    if not PINTEREST_TOKEN:
+        return False, "Pinterest access token missing"
+    if not any(PINTEREST_BOARDS.values()):
+        return False, "Pinterest board IDs missing"
+    return True, ""
+
+
 def _headers():
     return {
         "Authorization": f"Bearer {PINTEREST_TOKEN}",
@@ -58,7 +66,7 @@ def _pick_board(product: dict) -> str:
         board = PINTEREST_BOARDS.get("fitness")
     else:
         board = PINTEREST_BOARDS.get("deals")
-    return board or list(PINTEREST_BOARDS.values())[0]
+    return board or next((value for value in PINTEREST_BOARDS.values() if value), "")
 
 
 def post_pin(product: dict, image_path: str, caption: dict) -> dict | None:
@@ -85,8 +93,8 @@ def post_pin(product: dict, image_path: str, caption: dict) -> dict | None:
         "board_id":     board_id,
         "title":        caption.get("title", "")[:100],
         "description":  description,
-        "link":         product.get("affiliate_link", ""),
-        "alt_text":     product.get("title", "")[:500],
+        "link":         product.get("pin_link") or product.get("affiliate_link") or product.get("manual_link", ""),
+        "alt_text":     product.get("pin_alt_text") or product.get("title", "")[:500],
         "media_source": {
             "source_type": "media_id",
             "media_id":    media_id,
@@ -103,6 +111,8 @@ def post_pin(product: dict, image_path: str, caption: dict) -> dict | None:
         r.raise_for_status()
         pin_data = r.json()
         pin_id   = pin_data.get("id")
+        pin_data["board_id"] = board_id
+        pin_data["asin"] = product.get("asin")
         logger.info(f"Pin posted! ID={pin_id} ASIN={product.get('asin')}")
 
         # Log it
@@ -143,11 +153,22 @@ def post_batch(products_with_data: list[dict]) -> list[dict]:
     products_with_data: list of {product, image_path, caption}
     Returns list of successfully posted pin results.
     """
+    ready, reason = pinterest_config_status()
+    if not ready:
+        logger.warning(f"{reason} - writing manual fallback CSV without delays")
+        return {
+            "posted": [],
+            "failed": [{**item, "failure_reason": reason} for item in products_with_data],
+        }
+
     posted = []
+    failed = []
     for i, item in enumerate(products_with_data):
         result = post_pin(item["product"], item["image_path"], item["caption"])
         if result:
             posted.append(result)
+        else:
+            failed.append({**item, "failure_reason": "Pinterest API post failed"})
 
         # Human-like delay between pins (skip delay after last pin)
         if i < len(products_with_data) - 1:
@@ -161,4 +182,4 @@ def post_batch(products_with_data: list[dict]) -> list[dict]:
             time.sleep(delay)
 
     logger.info(f"Batch complete: {len(posted)}/{len(products_with_data)} pins posted")
-    return posted
+    return {"posted": posted, "failed": failed}

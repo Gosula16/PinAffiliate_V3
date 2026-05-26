@@ -1,10 +1,14 @@
 """M2 — Product Fetcher: Gadgets only, all fields, CSV, affiliate + manual links."""
 
 import json, logging, os, time, random, re, requests, csv
+from html import unescape
 from datetime import datetime, timedelta
-from config import (AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_PARTNER_TAG,
+from urllib.parse import parse_qs, quote_plus, urlparse
+from config import (AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_PARTNER_TAG, AMAZON_MARKETPLACE,
                     PRODUCTS_FILE, PRODUCTS_CSV, POSTED_LOG, DATA_DIR,
-                    MAX_PRODUCTS_PER_KW, ASIN_REPOST_DAYS, GADGET_KEYWORDS)
+                    MAX_PRODUCTS_PER_KW, DAILY_PRODUCT_COUNT, ASIN_REPOST_DAYS,
+                    GADGET_KEYWORDS)
+from modules.pinterest_bulk_csv import save_pinterest_bulk_csv
 
 logger = logging.getLogger("pinbot.products")
 
@@ -18,17 +22,110 @@ def _posted_asins():
 
 def _aff_link(asin):
     if AMAZON_PARTNER_TAG:
-        return f"https://www.amazon.in/dp/{asin}?tag={AMAZON_PARTNER_TAG}"
+        return f"https://{AMAZON_MARKETPLACE}/dp/{asin}?tag={AMAZON_PARTNER_TAG}"
     return None
 
 def _manual_link(asin):
-    return f"https://www.amazon.in/dp/{asin}"
+    return f"https://{AMAZON_MARKETPLACE}/dp/{asin}"
 
 def _sitestripe(asin):
-    return f"https://affiliate-program.amazon.in/home/textlink/sitestripe?asin={asin}"
+    # SiteStripe appears on the Amazon product page when the Associate is logged in.
+    # The Associate Central textlink URL redirects to the SiteStripe help/home page.
+    return _manual_link(asin)
 
 def _search_url(keyword):
-    return f"https://www.amazon.in/s?k={keyword.replace(' ','+')}&i=electronics"
+    return f"https://{AMAZON_MARKETPLACE}/s?k={quote_plus(keyword)}"
+
+
+def _clean_html(value: str) -> str:
+    value = re.sub(r"<[^>]+>", " ", value or "")
+    return unescape(re.sub(r"\s+", " ", value)).strip()
+
+
+def _short_title(title: str, max_len: int = 64) -> str:
+    title = re.split(r"\s+[|(-]\s*", title)[0].strip() or title
+    title = re.sub(r"\b(with|for)\b.*$", "", title, flags=re.I).strip() or title
+    return title[:max_len].rstrip(" ,|-")
+
+
+def _display_keyword(keyword: str) -> str:
+    keyword = re.sub(r"^best\s+", "", keyword.strip(), flags=re.I)
+    return keyword.title()
+
+
+def _trend_label(keyword: str) -> str:
+    keyword = keyword.lower()
+    if any(word in keyword for word in ["viral", "tiktok", "pinterest", "aesthetic"]):
+        return "viral trend"
+    if any(word in keyword for word in ["best seller", "best sellers", "amazon"]):
+        return "best seller"
+    if any(word in keyword for word in ["under", "budget", "deal"]):
+        return "budget pick"
+    return "daily trend"
+
+
+def _review_count(value) -> int:
+    if value is None:
+        return 0
+    digits = re.sub(r"[^0-9]", "", str(value))
+    return int(digits) if digits else 0
+
+
+def _product_score(product: dict) -> float:
+    rating = float(product.get("rating") or 0)
+    reviews = _review_count(product.get("reviews"))
+    price = float(product.get("price") or 0)
+    score = rating * 18
+    score += min(35, reviews ** 0.5 / 3)
+    if product.get("image_url"):
+        score += 8
+    if product.get("has_affiliate"):
+        score += 5
+    if 499 <= price <= 4999:
+        score += 7
+    elif 5000 <= price <= 14999:
+        score += 3
+    elif price > 15000:
+        score -= 8
+    score += float(product.get("trend_score") or 0)
+    return round(score, 2)
+
+
+def _board_for_keyword(keyword: str) -> str:
+    kw = keyword.lower()
+    if any(w in kw for w in ["kitchen", "air fryer", "mixer", "vacuum", "home", "decor", "storage", "organ"]):
+        return "Trending Home Finds"
+    if any(w in kw for w in ["fitness", "gym", "workout", "trimmer", "self care", "beauty", "skincare"]):
+        return "Wellness Beauty And Fitness Finds"
+    if any(w in kw for w in ["travel", "backpack", "car"]):
+        return "Travel And Everyday Essentials"
+    if any(w in kw for w in ["desk", "office", "laptop", "phone", "tech", "gadget", "gaming"]):
+        return "Budget Tech And Desk Setup"
+    return "Viral Amazon Finds"
+
+
+def extract_asin(value: str) -> str | None:
+    """Extract an ASIN from common Amazon product URL formats or raw ASIN text."""
+    if not value:
+        return None
+    value = value.strip()
+    if re.fullmatch(r"[A-Z0-9]{10}", value):
+        return value
+    for pattern in (
+        r"/dp/([A-Z0-9]{10})",
+        r"/gp/product/([A-Z0-9]{10})",
+        r"/product/([A-Z0-9]{10})",
+        r"/([A-Z0-9]{10})(?:[/?]|$)",
+    ):
+        match = re.search(pattern, value)
+        if match:
+            return match.group(1)
+    parsed = urlparse(value)
+    for key in ("asin", "ASIN"):
+        asin = parse_qs(parsed.query).get(key, [None])[0]
+        if asin and re.fullmatch(r"[A-Z0-9]{10}", asin):
+            return asin
+    return None
 
 
 def _build(asin, title, price, img, rating, reviews, keyword, source):
@@ -36,6 +133,15 @@ def _build(asin, title, price, img, rating, reviews, keyword, source):
     manual = _manual_link(asin)
     kw   = keyword.lower()
     price_str = f"Rs. {int(price):,}" if price else "check listing"
+    short = _short_title(title)
+    board = _board_for_keyword(keyword)
+    display_kw = _display_keyword(keyword)
+    trend_label = _trend_label(keyword)
+    google_title = f"{short} | {display_kw} Price, Review And Deals"
+    google_description = (
+        f"{short} is a {trend_label} for {kw}. Compare current price, rating, "
+        f"features and exact Amazon product link before you buy."
+    )
     return {
         "asin":           asin,
         "title":          title,
@@ -50,21 +156,77 @@ def _build(asin, title, price, img, rating, reviews, keyword, source):
         "fetched_at":     datetime.now().isoformat(),
         # Links
         "has_affiliate":  bool(aff),
+        "product_url":    manual,
         "affiliate_link": aff or "",
         "manual_link":    manual,
         "sitestripe_url": _sitestripe(asin),
         "search_url":     _search_url(keyword),
+        "trend_label":    trend_label,
+        "seo_keyword":    keyword,
+        "google_title":   google_title[:120],
+        "google_description": google_description[:220],
         # Pinterest ready fields
-        "pin_title":      f"Best {keyword.title()} India 2026 | Top Pick",
-        "pin_description":(f"Looking for the best {kw} in India? "
-                           f"This top-rated gadget is available for {price_str} on Amazon. "
-                           f"Check the link for full specs and today's lowest price! "
-                           f"#{kw.replace(' ','')} #amazonindia #gadgets #techindia"),
+        "pin_title":      f"{short} | {display_kw}"[:100],
+        "pin_description":(f"{short} is today's {trend_label} for {kw}. "
+                           f"Price: {price_str}. Check the exact product page for specs, reviews "
+                           f"and current offers. #{re.sub(r'[^a-z0-9]', '', kw)} #amazonfinds #dailyfinds #budgetshopping"),
         "pin_link":       aff or manual,
-        "pin_board":      "Best Tech Gadgets India",
+        "pin_board":      board,
         "pin_image_size": "1000x1500px",
-        "pin_alt_text":   f"{title} — available on Amazon India",
+        "pin_alt_text":   f"{title} available on Amazon",
     }
+
+
+def _product_page(asin: str, source_url: str | None = None) -> dict | None:
+    """Build a product record from a direct Amazon URL/ASIN."""
+    url = source_url if source_url and source_url.startswith(("http://", "https://")) else _manual_link(asin)
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
+            "Accept-Language": "en-IN,en;q=0.9",
+        }
+        r = requests.get(url, headers=headers, timeout=20)
+        if r.status_code != 200:
+            logger.warning(f"Amazon product page returned HTTP {r.status_code} for {asin}")
+            return _build(asin, f"Amazon gadget {asin}", None, "", None, None, "amazon product", "url")
+        html = r.text
+        title_match = re.search(r'id="productTitle"[^>]*>(.*?)<', html, re.S)
+        image_match = re.search(r'"hiRes"\s*:\s*"([^"]+)"', html) or re.search(r'"large"\s*:\s*"([^"]+)"', html)
+        price_match = re.search(r'class="a-price-whole">([0-9,]+)<', html)
+        rating_match = re.search(r'([0-9.]+) out of 5', html)
+        reviews_match = re.search(r'([\d,]+) ratings', html)
+        title = unescape(re.sub(r"\s+", " ", title_match.group(1)).strip()) if title_match else f"Amazon gadget {asin}"
+        price = float(price_match.group(1).replace(",", "")) if price_match else None
+        image = image_match.group(1).replace("\\/", "/") if image_match else ""
+        rating = float(rating_match.group(1)) if rating_match else None
+        reviews = reviews_match.group(1) if reviews_match else None
+        return _build(asin, title, price, image, rating, reviews, "amazon product", "url")
+    except Exception as e:
+        logger.warning(f"Direct Amazon URL fetch failed for {asin}: {e}")
+        return _build(asin, f"Amazon gadget {asin}", None, "", None, None, "amazon product", "url")
+
+
+def fetch_products_from_urls(urls: list[str]) -> list[dict]:
+    """Fetch Pinterest-ready product records from explicit Amazon URLs or ASINs."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    products, seen = [], set()
+    for value in urls:
+        asin = extract_asin(value)
+        if not asin:
+            logger.warning(f"Could not extract ASIN from: {value}")
+            continue
+        if asin in seen:
+            continue
+        product = _product_page(asin, value)
+        if product:
+            product["product_score"] = _product_score(product)
+            products.append(product)
+            seen.add(asin)
+    with open(PRODUCTS_FILE, "w", encoding="utf-8") as f:
+        json.dump({"fetched_at": datetime.now().isoformat(), "products": products}, f, indent=2, ensure_ascii=False)
+    _save_csv(products)
+    save_pinterest_bulk_csv(products)
+    return products
 
 
 def _paapi(keyword, n):
@@ -95,27 +257,43 @@ def _paapi(keyword, n):
 
 def _scrape(keyword, n):
     try:
-        url = f"https://www.amazon.in/s?k={keyword.replace(' ','+')}&i=electronics"
-        headers = {"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36","Accept-Language":"en-IN"}
+        url = _search_url(keyword)
+        headers = {"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36","Accept-Language":"en-IN,en;q=0.9"}
         r = requests.get(url, headers=headers, timeout=15)
         if r.status_code != 200: return []
-        asins   = list(dict.fromkeys(re.findall(r'data-asin="([A-Z0-9]{10})"', r.text)))
-        titles  = re.findall(r'a-size-medium[^"]*"[^>]*><span[^>]*>([^<]{10,120})<', r.text)
-        prices  = re.findall(r'a-price-whole">([0-9,]+)<', r.text)
-        ratings = re.findall(r'([0-9.]+) out of 5', r.text)
-        reviews = re.findall(r'([\d,]+) ratings', r.text)
-        imgs    = re.findall(r's-image"[^>]*src="([^"]+)"', r.text)
+        matches = list(re.finditer(r'data-asin="([A-Z0-9]{10})"', r.text))
         out = []
-        for i, asin in enumerate(asins):
-            if not asin: continue
-            price = float(prices[i].replace(",","")) if i < len(prices) else None
+        seen = set()
+        for i, match in enumerate(matches):
+            asin = match.group(1)
+            if not asin or asin in seen:
+                continue
+            seen.add(asin)
+            end = matches[i + 1].start() if i + 1 < len(matches) else match.start() + 16000
+            block = r.text[match.start():end]
+
+            title_match = (
+                re.search(r'<h2[^>]*>.*?<span[^>]*>(.*?)</span>', block, re.S)
+                or re.search(r'aria-label="([^"]{20,250})"', block, re.S)
+                or re.search(r'<img[^>]+alt="([^"]{20,250})"', block, re.S)
+            )
+            title = _clean_html(title_match.group(1)) if title_match else keyword.title()
+            title = title.rstrip(".")[:220]
+            if len(title) < 16 or len(title.split()) < 3:
+                continue
+
+            price_match = re.search(r'a-price-whole">([0-9,]+)<', block)
+            rating_match = re.search(r'([0-9.]+) out of 5', block)
+            reviews_match = re.search(r'([\d,]+) ratings', block)
+            image_match = re.search(r'class="s-image"[^>]*src="([^"]+)"', block)
+            price = float(price_match.group(1).replace(",","")) if price_match else None
             out.append(_build(
                 asin,
-                titles[i]  if i < len(titles)  else keyword.title(),
+                title,
                 price,
-                imgs[i]    if i < len(imgs)    else None,
-                float(ratings[i]) if i < len(ratings) else None,
-                reviews[i] if i < len(reviews) else None,
+                image_match.group(1) if image_match else None,
+                float(rating_match.group(1)) if rating_match else None,
+                reviews_match.group(1) if reviews_match else None,
                 keyword, "scrape"
             ))
             if len(out) >= n: break
@@ -128,33 +306,56 @@ def _scrape(keyword, n):
 def fetch_products(keywords=None):
     os.makedirs(DATA_DIR, exist_ok=True)
     posted = _posted_asins()
-    use_kw = GADGET_KEYWORDS  # always gadgets only
+    use_kw = []
+    for keyword in (keywords or []) + GADGET_KEYWORDS:
+        normalized = re.sub(r"\s+", " ", str(keyword)).strip()
+        if normalized and normalized.lower() not in {k.lower() for k in use_kw}:
+            use_kw.append(normalized)
 
     all_products, seen = [], set()
-    for kw in use_kw:
+    for trend_index, kw in enumerate(use_kw):
         logger.info(f"Fetching: {kw}")
         prods = _paapi(kw, MAX_PRODUCTS_PER_KW) or _scrape(kw, MAX_PRODUCTS_PER_KW)
         for p in prods:
             if p["asin"] not in posted and p["asin"] not in seen:
+                p["trend_score"] = max(0, 30 - trend_index)
+                p["product_score"] = _product_score(p)
                 seen.add(p["asin"])
                 all_products.append(p)
         time.sleep(random.uniform(1.0, 2.0))
 
+    ranked_products = sorted(
+        all_products,
+        key=lambda p: (p.get("product_score", 0), _review_count(p.get("reviews")), float(p.get("rating") or 0)),
+        reverse=True,
+    )
+    all_products, seen_titles = [], set()
+    for product in ranked_products:
+        title_key = re.sub(r"[^a-z0-9]+", " ", _short_title(product.get("title", ""), 52).lower()).strip()
+        if title_key in seen_titles:
+            continue
+        seen_titles.add(title_key)
+        all_products.append(product)
+        if len(all_products) >= DAILY_PRODUCT_COUNT:
+            break
+
     # Save JSON
-    with open(PRODUCTS_FILE, "w") as f:
+    with open(PRODUCTS_FILE, "w", encoding="utf-8") as f:
         json.dump({"fetched_at": datetime.now().isoformat(), "products": all_products}, f, indent=2, ensure_ascii=False)
 
     # Save CSV — all fields
     _save_csv(all_products)
-    logger.info(f"Saved {len(all_products)} gadgets | CSV + JSON written")
+    save_pinterest_bulk_csv(all_products)
+    logger.info(f"Saved {len(all_products)} trend-ranked products | CSV + JSON written")
     return all_products
 
 
 def _save_csv(products):
     if not products: return
     fields = ["asin","title","price","currency","rating","reviews","keyword","category",
-              "source","fetched_at","has_affiliate","affiliate_link","manual_link",
-              "sitestripe_url","search_url","pin_title","pin_description","pin_link",
+              "source","fetched_at","has_affiliate","product_url","affiliate_link","manual_link",
+              "sitestripe_url","search_url","trend_label","seo_keyword","google_title","google_description",
+              "trend_score","product_score","pin_title","pin_description","pin_link",
               "pin_board","pin_image_size","pin_alt_text","image_url"]
     with open(PRODUCTS_CSV, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
@@ -165,5 +366,5 @@ def _save_csv(products):
 
 def load_products():
     if not os.path.exists(PRODUCTS_FILE): return []
-    with open(PRODUCTS_FILE) as f:
+    with open(PRODUCTS_FILE, encoding="utf-8") as f:
         return json.load(f).get("products", [])
