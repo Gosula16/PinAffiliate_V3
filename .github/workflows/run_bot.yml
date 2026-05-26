@@ -49,9 +49,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/products.csv data/pinterest_bulk_editor.csv
-          test ! -f data/daily_stats.json || git add data/daily_stats.json
-          test ! -f data/pinterest_pins.csv || git add data/pinterest_pins.csv
-          test ! -f data/posted_log.json || git add data/posted_log.json
+          test ! -f data/daily_stats.json || git add -f data/daily_stats.json
+          test ! -f data/pinterest_pins.csv || git add -f data/pinterest_pins.csv
+          test ! -f data/posted_log.json || git add -f data/posted_log.json
           test ! -f data/trends.json || git add -f data/trends.json
           test ! -d output/images || git add -f output/images/
           git diff --cached --quiet || git commit -m "Run morning Pinterest publish path"
