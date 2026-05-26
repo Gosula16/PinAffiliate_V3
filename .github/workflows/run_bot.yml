@@ -49,6 +49,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/products.csv data/pinterest_bulk_editor.csv
+          test ! -f data/pinterest_upload.csv || git add data/pinterest_upload.csv
           test ! -f data/daily_stats.json || git add -f data/daily_stats.json
           test ! -f data/pinterest_pins.csv || git add -f data/pinterest_pins.csv
           test ! -f data/posted_log.json || git add -f data/posted_log.json
@@ -73,6 +74,7 @@ jobs:
           path: |
             data/products.csv
             data/pinterest_pins.csv
+            data/pinterest_upload.csv
             data/pinterest_bulk_editor.csv
             data/trends.json
             data/daily_stats.json

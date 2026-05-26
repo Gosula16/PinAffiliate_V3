@@ -307,8 +307,9 @@ textarea{resize:vertical;min-height:70px}
       <button class="btn btn-green btn-sm" onclick="document.getElementById('pin-csv-input').click()">Import CSV</button>
       <button class="btn btn-outline btn-sm" onclick="loadDataFiles()">Load data/ CSV</button>
       <button class="btn btn-blue btn-sm" onclick="generateDaywise()">Refresh Board</button>
-      <button class="btn btn-amber btn-sm" onclick="downloadPinterestCSV()">Download Pin CSV</button>
-      <a class="btn btn-outline btn-sm" href="data/pinterest_bulk_editor.csv" download onclick="showToast('Opening bulk editor CSV...')">Bulk Editor CSV</a>
+      <button class="btn btn-amber btn-sm" onclick="downloadPinterestCSV()">Pinterest Upload CSV</button>
+      <a class="btn btn-outline btn-sm" href="data/pinterest_upload.csv" download onclick="showToast('Opening Pinterest upload CSV...')">Direct CSV</a>
+      <a class="btn btn-outline btn-sm" href="data/pinterest_bulk_editor.csv" download onclick="showToast('Opening ads bulk editor CSV...')">Ads Bulk CSV</a>
     </div>
   </div>
   <div class="data-source" id="daywise-action-status">Ready.</div>
@@ -917,30 +918,24 @@ function downloadCSV() {
 }
 
 function downloadPinterestCSV() {
-  const fields = ['Title','Description','Destination URL','Board','Alt Text','Image Path','Image URL','ASIN','Price','Exact Product URL','Affiliate Link','Manual Link','SiteStripe URL','Status','Failure Reason','Created At'];
+  const fields = ['Title','Media URL','Pinterest board','Thumbnail','Description','Link','Publish date','Keywords'];
   const rows = [fields.join(',')];
   products.forEach(p => {
+    const mediaUrl = p.image_url && /^https?:\/\//.test(p.image_url) ? p.image_url : '';
+    if (!mediaUrl) return;
     const row = {
       'Title': p.pin_title || p.title || '',
+      'Media URL': mediaUrl,
+      'Pinterest board': p.pin_board || p.board_suggested || 'Viral Amazon Finds',
+      'Thumbnail': '',
       'Description': p.pin_description || '',
-      'Destination URL': p.pin_link || p.affiliate_link || p.manual_link || '',
-      'Board': p.pin_board || p.board_suggested || 'Best Tech Gadgets India',
-      'Alt Text': p.pin_alt_text || p.title || p.pin_title || '',
-      'Image Path': p.image_path || '',
-      'Image URL': p.image_url || '',
-      'ASIN': p.asin || '',
-      'Price': p.price || '',
-      'Exact Product URL': p.product_url || p.manual_link || '',
-      'Affiliate Link': p.affiliate_link || '',
-      'Manual Link': p.manual_link || '',
-      'SiteStripe URL': p.sitestripe_url || '',
-      'Status': p.status || 'ready',
-      'Failure Reason': p.failure_reason || '',
-      'Created At': p.fetched_at || new Date().toISOString(),
+      'Link': p.pin_link || p.affiliate_link || p.manual_link || '',
+      'Publish date': '',
+      'Keywords': [p.seo_keyword || p.keyword || '', p.trend_label || '', 'amazon finds', 'daily finds'].filter(Boolean).join(', '),
     };
-    rows.push(fields.map(f => `"${String(row[f] ?? '').replace(/"/g,'""')}"`).join(','));
+    rows.push(fields.map(f => `"${String(row[f] ?? '').slice(0, f === 'Description' ? 500 : f === 'Title' ? 100 : 1000).replace(/"/g,'""')}"`).join(','));
   });
-  saveCsvFile(rows.join('\n'), `PinAffiliateBot_Pinterest_Pins_${localDateKey()}.csv`);
+  saveCsvFile(rows.join('\n'), `PinAffiliateBot_Pinterest_Upload_${localDateKey()}.csv`);
 }
 
 function saveCsvFile(csvText, filename) {

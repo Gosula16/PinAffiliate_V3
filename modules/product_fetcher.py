@@ -9,6 +9,7 @@ from config import (AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_PARTNER_TAG, AM
                     MAX_PRODUCTS_PER_KW, DAILY_PRODUCT_COUNT, ASIN_REPOST_DAYS,
                     GADGET_KEYWORDS)
 from modules.pinterest_bulk_csv import save_pinterest_bulk_csv
+from modules.pinterest_upload_csv import save_pinterest_upload_csv
 
 logger = logging.getLogger("pinbot.products")
 
@@ -226,6 +227,7 @@ def fetch_products_from_urls(urls: list[str]) -> list[dict]:
         json.dump({"fetched_at": datetime.now().isoformat(), "products": products}, f, indent=2, ensure_ascii=False)
     _save_csv(products)
     save_pinterest_bulk_csv(products)
+    save_pinterest_upload_csv(products)
     return products
 
 
@@ -362,6 +364,7 @@ def fetch_products(keywords=None):
     # Save CSV — all fields
     _save_csv(all_products)
     save_pinterest_bulk_csv(all_products)
+    save_pinterest_upload_csv(all_products)
     logger.info(f"Saved {len(all_products)} trend-ranked products | CSV + JSON written")
     return all_products
 
@@ -428,5 +431,6 @@ def refresh_cached_products(products: list[dict], reason: str = "cached fallback
         json.dump({"fetched_at": now, "products": refreshed}, f, indent=2, ensure_ascii=False)
     _save_csv(refreshed)
     save_pinterest_bulk_csv(refreshed)
+    save_pinterest_upload_csv(refreshed)
     logger.info(f"Refreshed {len(refreshed)} cached products for today's queue")
     return refreshed
