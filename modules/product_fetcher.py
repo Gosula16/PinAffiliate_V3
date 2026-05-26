@@ -339,6 +339,10 @@ def fetch_products(keywords=None):
         if len(all_products) >= DAILY_PRODUCT_COUNT:
             break
 
+    if not all_products:
+        logger.warning("No fresh products found; keeping the last good product feed")
+        return []
+
     # Save JSON
     with open(PRODUCTS_FILE, "w", encoding="utf-8") as f:
         json.dump({"fetched_at": datetime.now().isoformat(), "products": all_products}, f, indent=2, ensure_ascii=False)
@@ -364,7 +368,53 @@ def _save_csv(products):
     logger.info(f"CSV: {PRODUCTS_CSV}")
 
 
+def _coerce_csv_value(value: str):
+    value = value or ""
+    if value.lower() in {"true", "false"}:
+        return value.lower() == "true"
+    number = re.sub(r"[^0-9.]", "", value)
+    if number and re.fullmatch(r"\d+(\.\d+)?", number):
+        try:
+            return float(number) if "." in number else int(number)
+        except ValueError:
+            return value
+    return value
+
+
+def load_products_csv():
+    if not os.path.exists(PRODUCTS_CSV):
+        return []
+    with open(PRODUCTS_CSV, newline="", encoding="utf-8") as f:
+        return [
+            {key: _coerce_csv_value(value) for key, value in row.items()}
+            for row in csv.DictReader(f)
+        ]
+
+
 def load_products():
-    if not os.path.exists(PRODUCTS_FILE): return []
-    with open(PRODUCTS_FILE, encoding="utf-8") as f:
-        return json.load(f).get("products", [])
+    if os.path.exists(PRODUCTS_FILE):
+        with open(PRODUCTS_FILE, encoding="utf-8") as f:
+            products = json.load(f).get("products", [])
+            if products:
+                return products
+    return load_products_csv()
+
+
+def refresh_cached_products(products: list[dict], reason: str = "cached fallback") -> list[dict]:
+    if not products:
+        return []
+    now = datetime.now().isoformat()
+    refreshed = []
+    for product in products:
+        item = dict(product)
+        item["fetched_at"] = now
+        item["queue_date"] = now[:10]
+        item["source"] = item.get("source") or "cached"
+        item["fallback_reason"] = reason
+        refreshed.append(item)
+    with open(PRODUCTS_FILE, "w", encoding="utf-8") as f:
+        json.dump({"fetched_at": now, "products": refreshed}, f, indent=2, ensure_ascii=False)
+    _save_csv(refreshed)
+    save_pinterest_bulk_csv(refreshed)
+    logger.info(f"Refreshed {len(refreshed)} cached products for today's queue")
+    return refreshed
