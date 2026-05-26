@@ -585,16 +585,16 @@ function localDateKey(date = new Date()) {
 
 async function loadDataFiles() {
   setActionStatus('Loading dashboard CSV files...');
+  let fallbackPinsCount = 0;
   const pinCsv = await fetchTextIfExists('data/pinterest_pins.csv');
-  if (pinCsv) {
+  if (pinCsv) fallbackPinsCount = parseCSV(pinCsv).length;
+  const productCsv = await fetchTextIfExists('data/products.csv');
+  if (productCsv) {
+    products = parseCSV(productCsv).map(normalizePinRow).filter(p => p.pin_title || p.title || p.asin);
+    dashboardSource = 'data/products.csv';
+  } else if (pinCsv) {
     products = parseCSV(pinCsv).map(normalizePinRow).filter(p => p.pin_title || p.title || p.asin);
     dashboardSource = 'data/pinterest_pins.csv';
-  } else {
-    const productCsv = await fetchTextIfExists('data/products.csv');
-    if (productCsv) {
-      products = parseCSV(productCsv).map(normalizePinRow).filter(p => p.pin_title || p.title || p.asin);
-      dashboardSource = 'data/products.csv';
-    }
   }
 
   const generatedStats = await fetchJsonIfExists('data/daily_stats.json');
@@ -613,7 +613,8 @@ async function loadDataFiles() {
   store.set('pinbot_log', postedLog);
   refreshAll();
   if (document.getElementById('page-daywise').classList.contains('active')) generateDaywise(false);
-  setActionStatus(`Loaded ${products.length} pins from ${dashboardSource}.`);
+  const fallbackNote = fallbackPinsCount ? ` Manual fallback CSV has ${fallbackPinsCount} prepared pins.` : '';
+  setActionStatus(`Loaded ${products.length} pins from ${dashboardSource}.${fallbackNote}`);
   showToast(`Loaded ${products.length} pins`);
 }
 
