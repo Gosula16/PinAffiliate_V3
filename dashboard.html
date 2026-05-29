@@ -960,6 +960,37 @@ function saveCsvFile(csvText, filename) {
   copyText(csvText, 'CSV copied as backup', false);
 }
 
+function downloadPinterestCSV() {
+  const fields = ['Title','Description','Destination URL','Board','Alt Text','Image Path','Image URL','ASIN','Price','Exact Product URL','Affiliate Link','Manual Link','SiteStripe URL','Status','Failure Reason','Created At'];
+  const rows = [fields.join(',')];
+  products.forEach(p => {
+    const row = {
+      'Title': p.pin_title || p.title || '',
+      'Description': p.pin_description || '',
+      'Destination URL': p.pin_link || p.affiliate_link || p.manual_link || '',
+      'Board': p.pin_board || p.board_suggested || 'Best Tech Gadgets India',
+      'Alt Text': p.pin_alt_text || p.title || p.pin_title || '',
+      'Image Path': p.image_path || '',
+      'Image URL': p.image_url || '',
+      'ASIN': p.asin || '',
+      'Price': p.price || '',
+      'Exact Product URL': p.product_url || p.manual_link || '',
+      'Affiliate Link': p.affiliate_link || '',
+      'Manual Link': p.manual_link || '',
+      'SiteStripe URL': p.sitestripe_url || '',
+      'Status': p.status || 'ready',
+      'Failure Reason': p.failure_reason || '',
+      'Created At': p.fetched_at || new Date().toISOString(),
+    };
+    rows.push(fields.map(f => `"${String(row[f] ?? '').replace(/"/g,'""')}"`).join(','));
+  });
+  const blob = new Blob([rows.join('\n')], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `PinAffiliateBot_Pinterest_Pins_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+}
+
 // ── Day-wise Pins ────────────────────────────────────────────
 function generateDaywise(showFeedback=true) {
   const container = document.getElementById('daywise-container');
