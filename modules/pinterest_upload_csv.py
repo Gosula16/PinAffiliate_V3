@@ -32,6 +32,8 @@ def _keywords(product: dict) -> str:
     values = [
         product.get("seo_keyword") or product.get("keyword") or "",
         product.get("trend_label") or "",
+        product.get("buyer_intent") or "",
+        product.get("quality_grade") or "",
         "amazon finds",
         "daily finds",
     ]
@@ -44,8 +46,8 @@ def _keywords(product: dict) -> str:
 
 
 def build_row(product: dict) -> dict:
-    title = product.get("pin_title") or product.get("Title") or product.get("title") or ""
-    description = product.get("pin_description") or product.get("Description") or product.get("google_description") or ""
+    title = str(product.get("pin_title") or product.get("Title") or product.get("title") or "")
+    description = str(product.get("pin_description") or product.get("Description") or product.get("google_description") or "")
     link = product.get("pin_link") or product.get("affiliate_link") or product.get("manual_link") or product.get("Link") or ""
     board = product.get("pin_board") or product.get("board_suggested") or product.get("Pinterest board") or "Viral Amazon Finds"
     return {

@@ -10,6 +10,7 @@ from config import (AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_PARTNER_TAG, AM
                     GADGET_KEYWORDS)
 from modules.pinterest_bulk_csv import save_pinterest_bulk_csv
 from modules.pinterest_upload_csv import save_pinterest_upload_csv
+from modules.intelligence import enrich_product, rank_products
 
 logger = logging.getLogger("publisher.products")
 
@@ -220,8 +221,7 @@ def fetch_products_from_urls(urls: list[str]) -> list[dict]:
             continue
         product = _product_page(asin, value)
         if product:
-            product["product_score"] = _product_score(product)
-            products.append(product)
+            products.append(enrich_product(product))
             seen.add(asin)
     with open(PRODUCTS_FILE, "w", encoding="utf-8") as f:
         json.dump({"fetched_at": datetime.now().isoformat(), "products": products}, f, indent=2, ensure_ascii=False)
@@ -321,16 +321,12 @@ def fetch_products(keywords=None):
         for p in prods:
             if p["asin"] not in posted and p["asin"] not in seen:
                 p["trend_score"] = max(0, 30 - trend_index)
-                p["product_score"] = _product_score(p)
+                p = enrich_product(p)
                 seen.add(p["asin"])
                 all_products.append(p)
         time.sleep(random.uniform(1.0, 2.0))
 
-    ranked_products = sorted(
-        all_products,
-        key=lambda p: (p.get("product_score", 0), _review_count(p.get("reviews")), float(p.get("rating") or 0)),
-        reverse=True,
-    )
+    ranked_products = rank_products(all_products)
     all_products, seen_titles = [], set()
     for product in ranked_products:
         title_key = re.sub(r"[^a-z0-9]+", " ", _short_title(product.get("title", ""), 52).lower()).strip()
@@ -351,7 +347,7 @@ def fetch_products(keywords=None):
         for product in cached:
             if product.get("asin") in seen_asins:
                 continue
-            all_products.append(product)
+            all_products.append(enrich_product(product))
             seen_asins.add(product.get("asin"))
             if len(all_products) >= DAILY_PRODUCT_COUNT:
                 break
@@ -374,8 +370,10 @@ def _save_csv(products):
     fields = ["asin","title","price","currency","rating","reviews","keyword","category",
               "source","fetched_at","has_affiliate","product_url","affiliate_link","manual_link",
               "sitestripe_url","search_url","trend_label","seo_keyword","google_title","google_description",
-              "trend_score","product_score","pin_title","pin_description","pin_link",
-              "pin_board","pin_image_size","pin_alt_text","image_url"]
+              "trend_score","product_score","ai_score","buyer_intent","quality_grade","recommendation",
+              "risk_flags","hf_signal","hf_signal_source","best_posting_window","seo_title_variants",
+              "caption_variants","pin_title","pin_description","pin_link","pin_board","pin_image_size",
+              "pin_alt_text","image_url"]
     with open(PRODUCTS_CSV, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         w.writeheader()
@@ -383,8 +381,15 @@ def _save_csv(products):
     logger.info(f"CSV: {PRODUCTS_CSV}")
 
 
-def _coerce_csv_value(value: str):
+def _coerce_csv_value(value: str, key: str = ""):
     value = value or ""
+    if key in {
+        "asin", "title", "pin_title", "pin_description", "google_title",
+        "google_description", "pin_alt_text", "keyword", "seo_keyword",
+        "image_url", "product_url", "affiliate_link", "manual_link",
+        "sitestripe_url", "search_url", "seo_title_variants", "caption_variants",
+    }:
+        return value
     if value.lower() in {"true", "false"}:
         return value.lower() == "true"
     number = re.sub(r"[^0-9.]", "", value)
@@ -401,7 +406,7 @@ def load_products_csv():
         return []
     with open(PRODUCTS_CSV, newline="", encoding="utf-8") as f:
         return [
-            {key: _coerce_csv_value(value) for key, value in row.items()}
+            {key: _coerce_csv_value(value, key) for key, value in row.items()}
             for row in csv.DictReader(f)
         ]
 
@@ -426,7 +431,7 @@ def refresh_cached_products(products: list[dict], reason: str = "cached fallback
         item["queue_date"] = now[:10]
         item["source"] = item.get("source") or "cached"
         item["fallback_reason"] = reason
-        refreshed.append(item)
+        refreshed.append(enrich_product(item))
     with open(PRODUCTS_FILE, "w", encoding="utf-8") as f:
         json.dump({"fetched_at": now, "products": refreshed}, f, indent=2, ensure_ascii=False)
     _save_csv(refreshed)

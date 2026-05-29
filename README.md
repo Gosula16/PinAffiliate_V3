@@ -8,9 +8,13 @@
 2. Searches Amazon.in for matching products via PAAPI
 3. Generates Pinterest-optimized images (1000×1500px) with Pillow
 4. Writes unique AI captions per pin via Gemini API
-5. Posts to Pinterest with human-like random delays
-6. Re-pins to secondary boards over 3–7 days automatically
-7. Sends Telegram alerts for stats and errors
+5. Scores every product with an AI ranking engine before posting
+6. Adds optional Hugging Face quality signals when a token is configured
+7. Posts to Pinterest with human-like random delays
+8. Re-pins to secondary boards over 3–7 days automatically
+9. Sends Telegram alerts for stats and errors
+
+Live dashboard: https://pinaffiliate.vercel.app
 
 ---
 
@@ -26,6 +30,7 @@ publisher/
 ├── modules/
 │   ├── trend_engine.py      # M1: Google Trends
 │   ├── product_fetcher.py   # M2: Amazon PAAPI
+│   ├── intelligence.py      # AI product score, SEO variants, HF signal
 │   ├── image_generator.py   # M3: Pillow pin images
 │   ├── caption_writer.py    # M4: Gemini AI captions
 │   ├── pin_poster.py        # M5: Pinterest API poster
@@ -72,6 +77,11 @@ This installs all Python packages and creates folders.
 1. Go to: https://aistudio.google.com
 2. Create API key → copy it
 
+**Hugging Face API Token (optional):**
+1. Go to: https://huggingface.co/settings/tokens
+2. Create a read token
+3. Add it as `HUGGINGFACE_API_TOKEN` to enable extra quality scoring
+
 **Telegram alerts (optional but recommended):**
 1. Create a Telegram notification token from Telegram settings
 2. Copy your Telegram token
@@ -112,6 +122,20 @@ python main.py --trends     # Refresh trends only
 python main.py --products   # Fetch products only
 python main.py --summary    # Send Telegram daily summary
 ```
+
+---
+
+## AI Ranking Engine
+Each product now receives:
+- `ai_score`: 0-100 score for posting priority
+- `buyer_intent`: high, medium, or low search intent
+- `quality_grade`: A, B, C, or D
+- `recommendation`: post or review
+- `risk_flags`: missing image, low rating, low review proof, manual link, high price
+- `seo_title_variants` and `caption_variants`: copy-ready A/B test ideas
+- `best_posting_window`: suggested time window for the product category
+
+The score blends trend position, price fit, rating, review volume, affiliate readiness, image availability, and optional Hugging Face text quality signal.
 
 ---
 

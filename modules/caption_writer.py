@@ -74,8 +74,16 @@ def _fallback(product):
     kw    = product.get("keyword","gadget").lower()
     price = int(product.get("price") or 0)
     ps    = f"Rs. {price:,}" if price else "at a great price"
+    try:
+        title_variants = json.loads(product.get("seo_title_variants") or "[]")
+    except Exception:
+        title_variants = []
+    try:
+        caption_variants = json.loads(product.get("caption_variants") or "[]")
+    except Exception:
+        caption_variants = []
     return {
-        "title":       f"Best {kw.title()} India 2026 | Top Pick",
-        "description": f"Looking for the best {kw} in India? This top-rated gadget is available for {ps} on Amazon — great value for money. Check the link for full specs and today's price.",
+        "title":       title_variants[0] if title_variants else f"Best {kw.title()} India 2026 | Top Pick",
+        "description": caption_variants[0] if caption_variants else f"Looking for the best {kw} in India? This top-rated gadget is available for {ps} on Amazon — great value for money. Check the link for full specs and today's price.",
         "hashtags":    [kw.replace(" ",""), "amazonindia", "budgetgadgets", "techindia", "amazondeals"],
     }

@@ -37,6 +37,7 @@ from modules.notifier        import (notify_startup, notify_product_pin,
 from modules.scheduler       import (is_posting_window, get_pins_posted_today,
                                      record_pins_posted, record_error,
                                      record_manual_fallback, wait_for_next_window)
+from modules.intelligence    import select_diverse_batch
 from config import MAX_PINS_PER_DAY, POST_WINDOWS, DAILY_STATS, PRODUCTS_CSV
 
 
@@ -115,7 +116,11 @@ def run_pipeline(dry_run: bool = False, amazon_urls: list[str] | None = None,
     except Exception as e:
         notify_error("M2 Products", str(e)); record_error(); return
 
-    selected = products[:batch_size]
+    selected = select_diverse_batch(products, batch_size)
+    logger.info(
+        "AI selected batch: %s",
+        ", ".join(f"{p.get('asin')}:{p.get('ai_score', p.get('product_score', 0))}" for p in selected),
+    )
 
     # ── M3 + M4: Images & Captions ───────────────────────────
     logger.info("── M3+M4: Images & Captions ──")

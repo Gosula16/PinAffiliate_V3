@@ -21,6 +21,11 @@ PINTEREST_BOARDS = {
 # Gemini
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
+# Hugging Face optional intelligence checks
+HUGGINGFACE_API_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN", "")
+HF_TEXT_MODEL = os.getenv("HF_TEXT_MODEL", "cardiffnlp/twitter-roberta-base-sentiment-latest")
+AI_MIN_PRODUCT_SCORE = int(os.getenv("AI_MIN_PRODUCT_SCORE", 55))
+
 # Telegram
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT = os.getenv("TELEGRAM_CHAT_ID", "")

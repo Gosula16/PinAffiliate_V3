@@ -27,6 +27,8 @@ def _keywords(product: dict) -> str:
     values = [
         product.get("seo_keyword") or product.get("keyword") or "",
         product.get("trend_label") or "",
+        product.get("buyer_intent") or "",
+        product.get("quality_grade") or "",
         "amazon finds",
         "daily finds",
     ]
@@ -44,8 +46,8 @@ def _media_url(product: dict) -> str:
 
 
 def _row(product: dict, index: int, today: str) -> dict:
-    title = (product.get("pin_title") or product.get("title") or "")[:100]
-    description = (product.get("pin_description") or product.get("google_description") or "")[:500]
+    title = str(product.get("pin_title") or product.get("title") or "")[:100]
+    description = str(product.get("pin_description") or product.get("google_description") or "")[:500]
     destination = product.get("pin_link") or product.get("affiliate_link") or product.get("manual_link") or ""
     keyword = _keywords(product)
     return {
@@ -66,7 +68,7 @@ def _row(product: dict, index: int, today: str) -> dict:
         "Pin Title": title,
         "Pin Description": description,
         "Organic Pin URL": destination,
-        "Image Alternative Text": (product.get("pin_alt_text") or product.get("title") or title)[:500],
+        "Image Alternative Text": str(product.get("pin_alt_text") or product.get("title") or title)[:500],
         "Is Ad-only Pin": "NO",
         "Promoted Pin Status": "DRAFT",
         "Ad Format": "STANDARD",

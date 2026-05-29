@@ -379,6 +379,7 @@ tr:hover td{background:rgba(255,255,255,.05)}
     <div class="stat-card"><div class="stat-label">Products</div><div class="stat-value" style="color:var(--blue)" id="s-products">0</div><div class="stat-sub">in queue</div></div>
     <div class="stat-card"><div class="stat-label">With Aff. Link</div><div class="stat-value" style="color:var(--amber)" id="s-afflinks">0</div><div class="stat-sub">auto-generated</div></div>
     <div class="stat-card"><div class="stat-label">Manual Links</div><div class="stat-value" style="color:var(--purple)" id="s-manual">0</div><div class="stat-sub">SiteStripe needed</div></div>
+    <div class="stat-card"><div class="stat-label">Avg AI Score</div><div class="stat-value" style="color:var(--cyan)" id="s-ai-score">0</div><div class="stat-sub"><span id="s-high-intent">0</span> high-intent</div></div>
   </div>
   <div class="two-col">
     <div class="card">
@@ -397,6 +398,14 @@ tr:hover td{background:rgba(255,255,255,.05)}
       <div class="btn-row">
         <a class="btn btn-outline btn-sm" href="https://affiliate-program.amazon.in/home" target="_blank">Associate Central ↗</a>
       </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">AI Intelligence Engine</div>
+    <div class="format-grid">
+      <div style="background:var(--s2);border-radius:8px;padding:10px"><div class="copy-label">Selection Logic</div><div class="compact-note">Trend demand + price fit + rating proof + review volume + affiliate readiness + image quality.</div></div>
+      <div style="background:var(--s2);border-radius:8px;padding:10px"><div class="copy-label">Hugging Face</div><div class="compact-note" id="hf-status">Optional quality signal. Add HUGGINGFACE_API_TOKEN to enable.</div></div>
+      <div style="background:var(--s2);border-radius:8px;padding:10px"><div class="copy-label">Next Action</div><div class="compact-note" id="ai-action">Load products to see post/review recommendations.</div></div>
     </div>
   </div>
   <div class="card">
@@ -454,10 +463,10 @@ tr:hover td{background:rgba(255,255,255,.05)}
       <table>
         <thead><tr>
           <th>ASIN</th><th>Title</th><th>Price</th><th>Rating</th>
-          <th>Affiliate Link</th><th>Exact Product URL</th><th>Open Product</th><th>Pin Ready</th>
+          <th>AI</th><th>Intent</th><th>Affiliate Link</th><th>Open Product</th><th>Pin Ready</th>
         </tr></thead>
         <tbody id="products-body">
-          <tr><td colspan="8" style="color:var(--muted);text-align:center;padding:20px">Run pipeline to fetch gadgets</td></tr>
+          <tr><td colspan="9" style="color:var(--muted);text-align:center;padding:20px">Run pipeline to fetch gadgets</td></tr>
         </tbody>
       </table>
     </div>
@@ -540,6 +549,13 @@ tr:hover td{background:rgba(255,255,255,.05)}
     <div class="card-title">Gemini API (Free)</div>
     <div class="form-group"><label>Gemini API Key</label><input type="password" id="s-gemini" placeholder="AIzaSy..."></div>
     <div style="font-size:12px;color:var(--muted);margin-top:4px">Get free key: <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--blue)">aistudio.google.com ↗</a></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Hugging Face Intelligence (Optional)</div>
+    <div class="form-row">
+      <div class="form-group"><label>Hugging Face Token</label><input type="password" id="s-hf-token" placeholder="hf_..."></div>
+      <div class="form-group"><label>Minimum AI Score</label><input type="number" id="s-ai-min" placeholder="55" value="55"></div>
+    </div>
   </div>
   <div class="card">
     <div class="card-title">Telegram (Optional)</div>
@@ -650,6 +666,31 @@ function esc(value) {
   }[ch]));
 }
 
+function num(value) {
+  return Number(String(value ?? '').replace(/[^0-9.]/g, '')) || 0;
+}
+
+function aiScore(product) {
+  return num(product.ai_score || product.product_score);
+}
+
+function scoreTag(product) {
+  const score = aiScore(product);
+  const grade = product.quality_grade || (score >= 78 ? 'A' : score >= 64 ? 'B' : score >= 50 ? 'C' : 'D');
+  const cls = score >= 78 ? 'tag-green' : score >= 64 ? 'tag-blue' : score >= 50 ? 'tag-amber' : 'tag-red';
+  return `<span class="tag ${cls}">${grade} ${Math.round(score)}</span>`;
+}
+
+function parseJsonList(value) {
+  if (Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(value || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 function parseCSV(text) {
   const rows = [];
   let row = [], cell = '', quoted = false;
@@ -704,7 +745,16 @@ function normalizePinRow(row) {
     seo_keyword: row.seo_keyword || row.keyword || row['Keyword (Match Type BROAD)'] || row['Ad Group Keyword (Match Type BROAD)'] || '',
     google_title: row.google_title || row['Google Title'] || title,
     google_description: row.google_description || row['Google Description'] || description,
-    product_score: row.product_score || '',
+    product_score: row.product_score || row['AI Score'] || '',
+    ai_score: row.ai_score || row['AI Score'] || row.product_score || '',
+    buyer_intent: row.buyer_intent || row['Buyer Intent'] || '',
+    quality_grade: row.quality_grade || row['Quality Grade'] || '',
+    recommendation: row.recommendation || row['Recommendation'] || 'post',
+    risk_flags: row.risk_flags || row['Risk Flags'] || 'clean',
+    best_posting_window: row.best_posting_window || row['Best Posting Window'] || '',
+    hf_signal_source: row.hf_signal_source || '',
+    seo_title_variants: row.seo_title_variants || '',
+    caption_variants: row.caption_variants || '',
     image_url: image,
     image_path: imagePath,
     has_affiliate: hasAffiliate,
@@ -880,12 +930,19 @@ function refreshAll() {
   const affCount = products.filter(p=>p.has_affiliate).length;
   const manCount = products.filter(p=>!p.has_affiliate).length;
   const pinsReady = Number(ts.pins_ready || 0);
+  const scores = products.map(aiScore).filter(Boolean);
+  const avgScore = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0) / scores.length) : 0;
+  const highIntent = products.filter(p => String(p.buyer_intent || '').toLowerCase() === 'high').length;
+  const postNow = products.filter(p => String(p.recommendation || 'post').toLowerCase() === 'post').length;
+  const hfEnabled = products.some(p => p.hf_signal_source === 'huggingface');
 
   document.getElementById('s-today').textContent = ts.pins_posted;
   document.getElementById('s-total').textContent = postedLog.length;
   document.getElementById('s-products').textContent = products.length;
   document.getElementById('s-afflinks').textContent = affCount;
   document.getElementById('s-manual').textContent = manCount;
+  document.getElementById('s-ai-score').textContent = avgScore;
+  document.getElementById('s-high-intent').textContent = highIntent;
   document.getElementById('s-max').textContent = max;
   document.getElementById('p-done').textContent = ts.pins_posted;
   document.getElementById('p-max').textContent = max;
@@ -894,6 +951,10 @@ function refreshAll() {
   if (sourceEl) sourceEl.textContent = `Current source: ${dashboardSource}. Use Import CSV for GitHub Actions artifacts.`;
   const dwSource = document.getElementById('dw-source');
   if (dwSource) dwSource.textContent = dashboardSource.split(/[\\/]/).pop().slice(0, 18);
+  const hfStatus = document.getElementById('hf-status');
+  if (hfStatus) hfStatus.textContent = hfEnabled ? 'Enabled: Hugging Face signal is included in AI score.' : 'Using deterministic scoring. Add HUGGINGFACE_API_TOKEN for model signal.';
+  const aiAction = document.getElementById('ai-action');
+  if (aiAction) aiAction.textContent = products.length ? `${postNow} products are above the AI post threshold. Average score ${avgScore}.` : 'Load products to see post/review recommendations.';
 
   const tag = document.getElementById('s-amz-tag')?.value || 'newdro04-21';
   document.getElementById('partner-tag-display').textContent = tag || 'Not set';
@@ -1074,32 +1135,26 @@ function renderProducts() {
     const matchQ = !q || String(p.asin||'').toLowerCase().includes(q) || String(p.title||p.pin_title||'').toLowerCase().includes(q);
     const matchA = !affF || (affF==='yes'?p.has_affiliate:!p.has_affiliate);
     return matchQ && matchA;
-  });
+  }).sort((a,b) => aiScore(b) - aiScore(a));
   document.getElementById('prod-count-label').textContent = `Showing ${filtered.length} of ${products.length} products`;
   if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:20px">No products found</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="color:var(--muted);text-align:center;padding:20px">No products found</td></tr>`;
     return;
   }
   tbody.innerHTML = filtered.map(p=>`<tr>
     <td class="td-mono">${esc(p.asin)}</td>
     <td class="td-title" title="${esc(p.title || p.pin_title)}">${esc(p.title || p.pin_title)}</td>
-    <td class="td-mono" style="white-space:nowrap">${p.price?'Rs. '+p.price.toLocaleString():'—'}</td>
-    <td class="td-mono">${esc(p.rating||'—')} ⭐</td>
+    <td class="td-mono" style="white-space:nowrap">${p.price?'Rs. '+Number(p.price).toLocaleString('en-IN'):'-'}</td>
+    <td class="td-mono">${esc(p.rating||'-')} star</td>
+    <td>${scoreTag(p)}<div class="compact-note">${esc(p.recommendation || 'post')}</div></td>
+    <td><span class="tag ${p.buyer_intent === 'high' ? 'tag-green' : p.buyer_intent === 'medium' ? 'tag-blue' : 'tag-gray'}">${esc(p.buyer_intent || 'n/a')}</span></td>
     <td>
       ${p.has_affiliate && p.affiliate_link
-        ? `<div class="aff-row"><span class="tag tag-green">✅ Auto</span> <a class="aff-link" href="${esc(p.affiliate_link)}" target="_blank">${esc(p.affiliate_link.slice(0,40))}...</a><button class="btn btn-outline btn-sm" onclick="copyText(${JSON.stringify(p.affiliate_link)})">Copy</button></div>`
-        : `<span class="tag tag-amber">⚠ No tag</span>`}
+        ? `<div class="aff-row"><span class="tag tag-green">Auto</span> <a class="aff-link" href="${esc(p.affiliate_link)}" target="_blank">${esc(p.affiliate_link.slice(0,40))}...</a><button class="btn btn-outline btn-sm" onclick="copyText(${JSON.stringify(p.affiliate_link)})">Copy</button></div>`
+        : `<span class="tag tag-amber">No tag</span>`}
     </td>
-    <td>
-      <div class="aff-row">
-        <a class="aff-link" href="${esc(p.product_url || p.manual_link)}" target="_blank">${esc(p.product_url || p.manual_link)}</a>
-        <button class="btn btn-outline btn-sm" onclick="copyText(${JSON.stringify(p.product_url || p.manual_link || '')})">Copy</button>
-      </div>
-    </td>
-    <td>
-      <a class="btn btn-amber btn-sm" href="${esc(p.sitestripe_url)}" target="_blank">Open Product + SiteStripe ↗</a>
-    </td>
-    <td><span class="tag tag-${p.has_affiliate?'green':'blue'}">${p.has_affiliate?'Ready':'Get link'}</span></td>
+    <td><a class="btn btn-amber btn-sm" href="${esc(p.sitestripe_url || p.product_url || p.manual_link)}" target="_blank">Open Product</a></td>
+    <td><span class="tag tag-${p.recommendation === 'review'?'amber':p.has_affiliate?'green':'blue'}">${p.recommendation === 'review'?'Review':'Ready'}</span></td>
   </tr>`).join('');
 }
 function filterProducts() { renderProducts(); }
@@ -1109,6 +1164,8 @@ function downloadCSV() {
   const fields = ['asin','title','price','currency','rating','reviews','keyword',
     'has_affiliate','product_url','affiliate_link','manual_link','sitestripe_url',
     'trend_label','seo_keyword','google_title','google_description','product_score',
+    'ai_score','buyer_intent','quality_grade','recommendation','risk_flags','best_posting_window',
+    'seo_title_variants','caption_variants',
     'pin_title','pin_description','pin_link','pin_board','board_suggested','image_url','fetched_at'];
   const rows = [fields.join(',')];
   products.forEach(p=>{
@@ -1253,7 +1310,9 @@ function renderDailyPin(p) {
   const alt = p.pin_alt_text || p.title || title;
   const img = p.image_url || '';
   const price = p.price ? `Rs. ${Number(p.price).toLocaleString('en-IN')}` : 'Check price';
-  const score = p.product_score ? `Score ${Number(p.product_score).toFixed(0)}` : (p.trend_label || 'trend ranked');
+  const score = aiScore(p) ? `AI ${Math.round(aiScore(p))}` : (p.trend_label || 'trend ranked');
+  const titleVariants = parseJsonList(p.seo_title_variants);
+  const captionVariants = parseJsonList(p.caption_variants);
   return `<article class="daily-pin">
     <div class="daily-pin-head">
       ${img ? `<img class="daily-img" src="${esc(img)}" alt="${esc(alt)}" onerror="this.outerHTML='<div class=&quot;daily-img daily-img-empty&quot;>1000x1500</div>'">` : `<div class="daily-img daily-img-empty">1000x1500</div>`}
@@ -1263,9 +1322,11 @@ function renderDailyPin(p) {
           <span class="tag ${p.has_affiliate?'tag-green':'tag-amber'}">${p.has_affiliate?'affiliate':'manual'}</span>
           <span class="tag tag-blue">${esc(price)}</span>
           <span class="tag tag-purple">${esc(score)}</span>
+          <span class="tag ${p.buyer_intent === 'high' ? 'tag-green' : 'tag-gray'}">${esc(p.buyer_intent || 'intent')}</span>
           ${p.status ? `<span class="tag tag-gray">${esc(p.status)}</span>` : ''}
         </div>
         <div class="compact-note" style="margin-top:8px">ASIN: <span class="td-mono">${esc(p.asin || 'N/A')}</span></div>
+        <div class="compact-note">Grade ${esc(p.quality_grade || '-')} | ${esc(p.recommendation || 'post')} | ${esc(p.best_posting_window || 'any window')}</div>
         ${p.failure_reason ? `<div class="compact-note" style="color:var(--amber)">Fallback: ${esc(p.failure_reason)}</div>` : ''}
       </div>
     </div>
@@ -1273,7 +1334,10 @@ function renderDailyPin(p) {
     ${copyBlock('Description', description, true)}
     ${copyBlock('Google SEO Title', p.google_title || title)}
     ${copyBlock('Google SEO Description', p.google_description || description, true)}
+    ${copyBlock('AI Title Variants', titleVariants.join('\n') || p.google_title || title, true)}
+    ${copyBlock('AI Caption Variants', captionVariants.join('\n\n') || description, true)}
     ${copyBlock('Search Keyword', p.seo_keyword || p.keyword || '')}
+    ${copyBlock('AI Risk Flags', p.risk_flags || 'clean')}
     ${copyBlock('Destination URL', link)}
     ${copyBlock('Exact Amazon Product URL', p.product_url || p.manual_link || link)}
     ${copyBlock('Board', board)}
@@ -1326,6 +1390,9 @@ function generateEnv() {
     `BOARD_TECH=${document.getElementById('s-b-tech').value||''}`,
     `BOARD_DEALS=${document.getElementById('s-b-deals').value||''}`,
     `GEMINI_API_KEY=${document.getElementById('s-gemini').value||''}`,
+    `HUGGINGFACE_API_TOKEN=${document.getElementById('s-hf-token').value||''}`,
+    'HF_TEXT_MODEL=cardiffnlp/twitter-roberta-base-sentiment-latest',
+    `AI_MIN_PRODUCT_SCORE=${document.getElementById('s-ai-min').value||'55'}`,
     `TELEGRAM_TOKEN=${document.getElementById('s-tg-token').value||''}`,
     `TELEGRAM_CHAT_ID=${document.getElementById('s-tg-chat').value||''}`,
     'MAX_PINS_PER_DAY=30',
