@@ -4,7 +4,7 @@ import logging, json, os, random, time
 from datetime import datetime, date
 from config import POST_WINDOWS, MAX_PINS_PER_DAY, DAILY_STATS, DATA_DIR
 
-logger = logging.getLogger("pinbot.scheduler")
+logger = logging.getLogger("publisher.scheduler")
 
 
 def is_posting_window() -> tuple[bool, int]:

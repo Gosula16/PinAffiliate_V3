@@ -6,7 +6,7 @@ from datetime import datetime
 from config import (PINTEREST_TOKEN, PINTEREST_BOARDS, POSTED_LOG,
                     MIN_DELAY_SEC, MAX_DELAY_SEC, DATA_DIR)
 
-logger = logging.getLogger("pinbot.poster")
+logger = logging.getLogger("publisher.poster")
 
 PINTEREST_API = "https://api.pinterest.com/v5"
 

@@ -22,10 +22,10 @@ PINTEREST_BOARDS = {
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # Telegram
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT = os.getenv("TELEGRAM_CHAT_ID", "")
 
-# Bot behaviour
+# Publisher behaviour
 MAX_PINS_PER_DAY = int(os.getenv("MAX_PINS_PER_DAY", 30))
 MIN_DELAY_SEC = int(os.getenv("MIN_DELAY_SEC", 180))
 MAX_DELAY_SEC = int(os.getenv("MAX_DELAY_SEC", 420))

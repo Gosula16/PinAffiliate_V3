@@ -4,7 +4,7 @@ import json, logging, os
 from datetime import datetime, timedelta
 from config import PINTEREST_BOARDS, DATA_DIR
 
-logger = logging.getLogger("pinbot.rotation")
+logger = logging.getLogger("publisher.rotation")
 
 ROTATION_FILE = os.path.join(DATA_DIR, "rotation_queue.json")
 

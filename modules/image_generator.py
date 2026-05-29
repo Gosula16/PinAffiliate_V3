@@ -6,7 +6,7 @@ from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 from config import OUTPUT_IMAGES, IMAGE_TEMPLATES
 
-logger = logging.getLogger("pinbot.images")
+logger = logging.getLogger("publisher.images")
 
 CANVAS_W, CANVAS_H = 1000, 1500
 

@@ -1,4 +1,4 @@
-# PinAffiliateBot v1.0
+# PinAffiliate v1.0
 **Pinterest + Amazon Affiliate Automation — Complete System**
 
 ---
@@ -7,7 +7,7 @@
 1. Fetches trending product keywords from Google India
 2. Searches Amazon.in for matching products via PAAPI
 3. Generates Pinterest-optimized images (1000×1500px) with Pillow
-4. Writes unique AI captions per pin via Anthropic API
+4. Writes unique AI captions per pin via Gemini API
 5. Posts to Pinterest with human-like random delays
 6. Re-pins to secondary boards over 3–7 days automatically
 7. Sends Telegram alerts for stats and errors
@@ -16,7 +16,7 @@
 
 ## Folder Structure
 ```
-pinbot/
+publisher/
 ├── main.py                  # Master runner — start here
 ├── config.py                # All settings and keys
 ├── setup.bat                # Windows one-click setup
@@ -27,7 +27,7 @@ pinbot/
 │   ├── trend_engine.py      # M1: Google Trends
 │   ├── product_fetcher.py   # M2: Amazon PAAPI
 │   ├── image_generator.py   # M3: Pillow pin images
-│   ├── caption_writer.py    # M4: Anthropic AI captions
+│   ├── caption_writer.py    # M4: Gemini AI captions
 │   ├── pin_poster.py        # M5: Pinterest API poster
 │   ├── scheduler.py         # M6: Posting windows
 │   ├── board_rotation.py    # Re-pin to secondary boards
@@ -68,14 +68,14 @@ This installs all Python packages and creates folders.
 3. Enable scopes: `pins:read_write` and `boards:read`
 4. Copy your Board IDs from each board's URL
 
-**Anthropic API Key:**
-1. Go to: https://console.anthropic.com
+**Gemini API Key:**
+1. Go to: https://aistudio.google.com
 2. Create API key → copy it
 
-**Telegram Bot (optional but recommended):**
-1. Message @BotFather on Telegram → /newbot
-2. Copy your bot token
-3. Get your Chat ID from @userinfobot
+**Telegram alerts (optional but recommended):**
+1. Create a Telegram notification token from Telegram settings
+2. Copy your Telegram token
+3. Get your Telegram Chat ID
 
 ### Step 3 — Fill .env file
 ```

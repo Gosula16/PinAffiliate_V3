@@ -50,7 +50,7 @@ def _row(product: dict, index: int, today: str) -> dict:
     keyword = _keywords(product)
     return {
         "Campaign Objective": "CONSIDERATION",
-        "Campaign Name": f"PinAffiliateBot Daily Finds {today}",
+        "Campaign Name": f"PinAffiliate Daily Finds {today}",
         "Campaign Status": "DRAFT",
         "Campaign Budget": "NO",
         "Time Zone": "Asia/Kolkata",

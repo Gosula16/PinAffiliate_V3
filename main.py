@@ -1,4 +1,4 @@
-"""PinAffiliateBot — Complete Pipeline with Telegram Pinterest-format notifications."""
+"""PinAffiliate — Complete Pipeline with Telegram Pinterest-format notifications."""
 
 import logging, os, sys, json, time, random
 from datetime import datetime
@@ -20,7 +20,7 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout),
     ],
 )
-logger = logging.getLogger("pinbot.main")
+logger = logging.getLogger("publisher.main")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from modules.trend_engine    import load_trends, fetch_trends
@@ -58,7 +58,7 @@ def _scheduled_batch_size(in_window: bool, window_pins: int, remaining: int) -> 
 def run_pipeline(dry_run: bool = False, amazon_urls: list[str] | None = None,
                  wait_for_window: bool = True, scheduled_run: bool = False):
     logger.info("=" * 60)
-    logger.info(f"PinAffiliateBot | dry_run={dry_run} | scheduled_run={scheduled_run} | {datetime.now()}")
+    logger.info(f"PinAffiliate | dry_run={dry_run} | scheduled_run={scheduled_run} | {datetime.now()}")
     logger.info("=" * 60)
     notify_startup()
 
@@ -227,7 +227,7 @@ def run_scheduler_loop():
 
 if __name__ == "__main__":
     import argparse
-    p = argparse.ArgumentParser(description="PinAffiliateBot v1.0")
+    p = argparse.ArgumentParser(description="PinAffiliate v1.0")
     p.add_argument("--dry-run",  action="store_true", help="Generate but don't post")
     p.add_argument("--once",     action="store_true", help="Run one batch and exit")
     p.add_argument("--loop",     action="store_true", help="Run continuously")

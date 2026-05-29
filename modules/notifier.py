@@ -7,7 +7,7 @@ import requests, logging, os
 from datetime import date, datetime
 from config import TELEGRAM_TOKEN, TELEGRAM_CHAT
 
-logger = logging.getLogger("pinbot.telegram")
+logger = logging.getLogger("publisher.telegram")
 
 
 # ── Core send functions ───────────────────────────────────────
@@ -148,7 +148,7 @@ def notify_batch_done(posted: int, total: int, products: list = None):
     max_pins = int(os.getenv("MAX_PINS_PER_DAY", 15))
     pct      = min(100, round(total / max_pins * 100))
 
-    msg = f"""✅ *PinAffiliateBot — Batch Complete*
+    msg = f"""✅ *PinAffiliate — Batch Complete*
 ━━━━━━━━━━━━━━━━━━━━━
 📌 Posted this batch: *{posted} pins*
 📊 Today total: *{total}/{max_pins}* ({pct}%)
@@ -169,7 +169,7 @@ def notify_batch_done(posted: int, total: int, products: list = None):
             msg += f"   💰 {ps} | {link_label}\n"
             msg += f"   🔗 `{aff}`\n"
 
-    msg += f"\n━━━━━━━━━━━━━━━━━━━━━\n🤖 PinAffiliateBot | newdro04-21"
+    msg += f"\n━━━━━━━━━━━━━━━━━━━━━\n🤖 PinAffiliate | newdro04-21"
     _send_text(msg)
 
 
@@ -183,7 +183,7 @@ def notify_daily_summary(stats: dict, csv_path: str = None):
     errors = s.get("errors", 0)
     status = "✅ All good" if errors == 0 else f"⚠️ {errors} errors — check logs"
 
-    msg = f"""📊 *PinAffiliateBot — Daily Summary*
+    msg = f"""📊 *PinAffiliate — Daily Summary*
 ━━━━━━━━━━━━━━━━━━━━━
 📅 Date: {today}
 📌 Pins posted: *{posted}*
@@ -191,7 +191,7 @@ def notify_daily_summary(stats: dict, csv_path: str = None):
 🔰 Status: {status}
 ━━━━━━━━━━━━━━━━━━━━━
 📁 Products CSV attached below ↓
-🤖 PinAffiliateBot | newdro04-21"""
+🤖 PinAffiliate | newdro04-21"""
 
     _send_text(msg)
 
@@ -204,7 +204,7 @@ def notify_daily_summary(stats: dict, csv_path: str = None):
 
 def notify_error(module: str, error: str):
     _send_text(
-        f"🔴 *PinBot ERROR — {module}*\n"
+        f"🔴 *PinAffiliate ERROR — {module}*\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"`{str(error)[:300]}`\n"
         f"🕐 {datetime.now().strftime('%I:%M %p IST')}"
@@ -213,7 +213,7 @@ def notify_error(module: str, error: str):
 
 def notify_token_expired():
     _send_text(
-        "⚠️ *PinBot ALERT — Pinterest Token Expired!*\n"
+        "⚠️ *PinAffiliate ALERT — Pinterest Token Expired!*\n"
         "━━━━━━━━━━━━━━━━━━━━━\n"
         "1. Go to developers.pinterest.com\n"
         "2. Open your app → Generate new token\n"
@@ -224,7 +224,7 @@ def notify_token_expired():
 
 def notify_startup():
     _send_text(
-        f"🚀 *PinAffiliateBot Started*\n"
+        f"🚀 *PinAffiliate Started*\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"🕐 {datetime.now().strftime('%d %b %Y, %I:%M %p IST')}\n"
         f"🎯 Niche: Electronics & Gadgets\n"

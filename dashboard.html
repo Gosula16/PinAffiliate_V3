@@ -27,7 +27,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .nav-item.active{color:var(--text);border-left-color:var(--red);background:var(--s2)}
 .nav-icon{font-size:15px;width:18px;text-align:center}
 .sidebar-footer{margin-top:auto;padding:16px 20px;border-top:1px solid var(--border)}
-.bot-status{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.publisher-status{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
 .dot.off{background:var(--muted);animation:none}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
@@ -352,7 +352,7 @@ tr:hover td{background:rgba(255,255,255,.05)}
     <div class="nav-item" onclick="nav('logs')"><span class="nav-icon">📋</span>Logs</div>
   </div>
   <div class="sidebar-footer">
-    <div class="bot-status"><div class="dot off" id="bot-dot"></div><span id="bot-status-txt">Idle</span></div>
+    <div class="publisher-status"><div class="dot off" id="publisher-dot"></div><span id="publisher-status-txt">Idle</span></div>
   </div>
 </aside>
 
@@ -410,7 +410,7 @@ tr:hover td{background:rgba(255,255,255,.05)}
 
 <!-- ══ PIPELINE ══ -->
 <div class="page" id="page-pipeline">
-  <div class="page-hdr"><div><div class="page-title">Run Pipeline</div><div class="page-sub">Execute bot modules manually</div></div></div>
+  <div class="page-hdr"><div><div class="page-title">Run Pipeline</div><div class="page-sub">Execute publishing modules manually</div></div></div>
   <div class="two-col">
     <div class="card">
       <div class="card-title">Quick Actions</div>
@@ -632,16 +632,16 @@ const SAMPLE_PRODUCTS = [
     board_suggested:"Creator Gadgets India", fetched_at: new Date().toISOString() },
 ];
 
-let products = store.get('pinbot_products') || [];
-let postedLog = store.get('pinbot_log') || [];
-let statsData = store.get('pinbot_stats') || {};
-let dashboardSource = store.get('pinbot_source') || 'no CSV loaded';
+let products = store.get('publisher_products') || [];
+let postedLog = store.get('publisher_log') || [];
+let statsData = store.get('publisher_stats') || {};
+let dashboardSource = store.get('publisher_source') || 'no CSV loaded';
 
 if (dashboardSource === 'sample data' || products.some(p => String(p.asin || '').includes('XYZ'))) {
   products = [];
   dashboardSource = 'no CSV loaded';
-  store.set('pinbot_products', products);
-  store.set('pinbot_source', dashboardSource);
+  store.set('publisher_products', products);
+  store.set('publisher_source', dashboardSource);
 }
 
 function esc(value) {
@@ -798,10 +798,10 @@ async function loadDataFiles() {
     postedLog = generatedLog;
   }
 
-  store.set('pinbot_products', products);
-  store.set('pinbot_source', dashboardSource);
-  store.set('pinbot_stats', statsData);
-  store.set('pinbot_log', postedLog);
+  store.set('publisher_products', products);
+  store.set('publisher_source', dashboardSource);
+  store.set('publisher_stats', statsData);
+  store.set('publisher_log', postedLog);
   dashboardLoaded = true;
   productsRenderedKey = '';
   pinsRenderedKey = '';
@@ -820,8 +820,8 @@ function importPinsCSV(event) {
   reader.onload = () => {
     products = parseCSV(String(reader.result)).map(normalizePinRow).filter(p => p.pin_title || p.title || p.asin);
     dashboardSource = file.name;
-    store.set('pinbot_products', products);
-    store.set('pinbot_source', dashboardSource);
+    store.set('publisher_products', products);
+    store.set('publisher_source', dashboardSource);
     productsRenderedKey = '';
     pinsRenderedKey = '';
     daywiseRenderedKey = '';
@@ -1014,8 +1014,8 @@ function runPipeline(mode) {
   nav('pipeline');
   const log = document.getElementById('pipeline-log');
   log.innerHTML = '';
-  document.getElementById('bot-dot').className = 'dot';
-  document.getElementById('bot-status-txt').textContent = 'Running...';
+  document.getElementById('publisher-dot').className = 'dot';
+  document.getElementById('publisher-status-txt').textContent = 'Running...';
   renderModules({m1:'running'});
 
   const msgs = PIPELINE_LOGS[mode] || PIPELINE_LOGS.dry;
@@ -1023,21 +1023,21 @@ function runPipeline(mode) {
   const iv = setInterval(()=>{
     if (i >= msgs.length) {
       clearInterval(iv);
-      document.getElementById('bot-dot').className = 'dot off';
-      document.getElementById('bot-status-txt').textContent = 'Idle';
+      document.getElementById('publisher-dot').className = 'dot off';
+      document.getElementById('publisher-status-txt').textContent = 'Idle';
       renderModules({m1:'done',m2:'done',m3:'done',m4:'done',m5:mode==='full'?'done':'idle',m6:'idle'});
       if (mode==='full') {
         // Add fake posted pins
         const today = new Date().toISOString().split('T')[0];
         if (!statsData[today]) statsData[today]={pins_posted:0,errors:0};
         statsData[today].pins_posted += 3;
-        store.set('pinbot_stats', statsData);
+        store.set('publisher_stats', statsData);
         products.slice(0, 3).forEach((p,idx)=>{
           postedLog.push({asin:p.asin,pin_id:'pin_abc00'+(idx+1),
             title:p.title || p.pin_title,price:p.price,
             posted_at:new Date().toISOString()});
         });
-        store.set('pinbot_log', postedLog);
+        store.set('publisher_log', postedLog);
       }
       if (mode==='csv') downloadCSV();
       return;
@@ -1231,7 +1231,7 @@ function generateDaywise(showFeedback=true) {
     </div>`;
   }
   container.innerHTML = html || `<div class="card compact-note">
-    No real Amazon products loaded yet. Import the GitHub Actions <strong>pinbot-csv</strong> artifact, or run the bot to create <strong>data/pinterest_pins.csv</strong>. Fake demo links are hidden so you do not copy invalid Amazon URLs.
+    No real Amazon products loaded yet. Import the GitHub Actions <strong>publisher-csv</strong> artifact, or run the publisher to create <strong>data/pinterest_pins.csv</strong>. Fake demo links are hidden so you do not copy invalid Amazon URLs.
   </div>`;
   setActionStatus(`Board refreshed: ${usable.length} pins across ${usable.length ? days : 0} day(s).`);
   if (showFeedback) showToast('Board refreshed');
@@ -1326,7 +1326,7 @@ function generateEnv() {
     `BOARD_TECH=${document.getElementById('s-b-tech').value||''}`,
     `BOARD_DEALS=${document.getElementById('s-b-deals').value||''}`,
     `GEMINI_API_KEY=${document.getElementById('s-gemini').value||''}`,
-    `TELEGRAM_BOT_TOKEN=${document.getElementById('s-tg-token').value||''}`,
+    `TELEGRAM_TOKEN=${document.getElementById('s-tg-token').value||''}`,
     `TELEGRAM_CHAT_ID=${document.getElementById('s-tg-chat').value||''}`,
     'MAX_PINS_PER_DAY=30',
     'MIN_DELAY_SEC=180',
@@ -1341,15 +1341,15 @@ function copyEnv() {
 
 // ── Logs ─────────────────────────────────────────────────────
 const SAMPLE_LOGS = [
-  '[07:30:01] [pinbot.main] INFO — PinAffiliate starting | gadgets mode',
-  '[07:30:03] [pinbot.trends] INFO — 12 gadget keywords loaded',
-  '[07:30:05] [pinbot.products] INFO — Fetching: wireless earbuds',
-  '[07:30:07] [pinbot.products] INFO — Fetching: power bank',
-  '[07:31:12] [pinbot.products] INFO — 28 gadgets saved | CSV exported',
-  '[07:31:14] [pinbot.images] INFO — Generated: B09XYZ111_dark_red.jpg',
-  '[07:31:19] [pinbot.captions] INFO — Gemini caption OK for B09XYZ111',
-  '[07:31:22] [pinbot.poster] INFO — Pin posted! ID=pin_abc001',
-  '[07:31:23] [pinbot.poster] INFO — Waiting 287s before next pin...',
+  '[07:30:01] [publisher.main] INFO — PinAffiliate starting | gadgets mode',
+  '[07:30:03] [publisher.trends] INFO — 12 gadget keywords loaded',
+  '[07:30:05] [publisher.products] INFO — Fetching: wireless earbuds',
+  '[07:30:07] [publisher.products] INFO — Fetching: power bank',
+  '[07:31:12] [publisher.products] INFO — 28 gadgets saved | CSV exported',
+  '[07:31:14] [publisher.images] INFO — Generated: B09XYZ111_dark_red.jpg',
+  '[07:31:19] [publisher.captions] INFO — Gemini caption OK for B09XYZ111',
+  '[07:31:22] [publisher.poster] INFO — Pin posted! ID=pin_abc001',
+  '[07:31:23] [publisher.poster] INFO — Waiting 287s before next pin...',
 ];
 function renderLogs() {
   document.getElementById('log-display').innerHTML = SAMPLE_LOGS.map(l=>{

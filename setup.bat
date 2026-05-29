@@ -1,6 +1,6 @@
 @echo off
 echo ============================================
-echo  PinAffiliateBot — Windows Setup
+echo  PinAffiliate — Windows Setup
 echo ============================================
 echo.
 

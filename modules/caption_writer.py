@@ -3,7 +3,7 @@
 import json, logging, re, requests
 from config import GEMINI_API_KEY
 
-logger = logging.getLogger("pinbot.captions")
+logger = logging.getLogger("publisher.captions")
 
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={}"
 

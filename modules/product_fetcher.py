@@ -11,7 +11,7 @@ from config import (AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_PARTNER_TAG, AM
 from modules.pinterest_bulk_csv import save_pinterest_bulk_csv
 from modules.pinterest_upload_csv import save_pinterest_upload_csv
 
-logger = logging.getLogger("pinbot.products")
+logger = logging.getLogger("publisher.products")
 
 
 def _posted_asins():

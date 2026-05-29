@@ -2,7 +2,7 @@
 
 import time, logging, functools, random
 
-logger = logging.getLogger("pinbot.retry")
+logger = logging.getLogger("publisher.retry")
 
 
 def with_retry(max_attempts: int = 3, base_delay: float = 2.0, exceptions=(Exception,)):

@@ -8,7 +8,7 @@ from datetime import datetime
 
 from config import DATA_DIR, FALLBACK_KEYWORDS, TREND_SEED_KEYWORDS, TRENDS_FILE
 
-logger = logging.getLogger("pinbot.trends")
+logger = logging.getLogger("publisher.trends")
 
 COMMERCIAL_WORDS = [
     "best", "top", "buy", "cheap", "under", "budget", "review", "price",
