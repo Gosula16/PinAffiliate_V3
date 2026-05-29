@@ -4,13 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PinAffiliateBot — Dashboard</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#0b0d12;--surface:#13161f;--s2:#1a1e2a;--s3:#222736;
   --border:#2a2f3d;--red:#e63946;--green:#2ecc71;--amber:#f39c12;
   --blue:#3b82f6;--purple:#8b5cf6;--cyan:#06b6d4;
-  --text:#e8eaf0;--muted:#6b7280;--font:'Inter',sans-serif;--mono:'JetBrains Mono',monospace;
+  --text:#e8eaf0;--muted:#6b7280;--font:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;--mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;overflow-x:hidden}
@@ -166,10 +165,9 @@ body{
   -webkit-font-smoothing:antialiased;
 }
 .sidebar,.card,.stat-card,.daily-pin{
-  background:linear-gradient(180deg,var(--glass-strong),rgba(16,19,27,.88));
+  background:rgba(22,26,36,.94);
   border-color:var(--hairline);
-  box-shadow:var(--ios-shadow);
-  backdrop-filter:blur(22px) saturate(150%);
+  box-shadow:0 10px 28px rgba(0,0,0,.28);
 }
 .sidebar{border-right-color:rgba(255,255,255,.07)}
 .logo{border-bottom-color:var(--hairline)}
@@ -178,17 +176,17 @@ body{
 .nav-item.active{background:rgba(255,255,255,.09);box-shadow:inset 0 0 0 1px rgba(255,255,255,.04)}
 .main{padding:34px clamp(22px,3vw,42px)}
 .page-hdr{
-  position:sticky;
+  position:relative;
   top:0;
   z-index:20;
   padding:10px 0 18px;
   margin:-10px 0 22px;
-  background:linear-gradient(180deg,rgba(8,10,16,.94),rgba(8,10,16,.72) 76%,transparent);
-  backdrop-filter:blur(18px);
+  background:transparent;
 }
 .page-title{font-size:clamp(26px,3.4vw,38px);line-height:1.05;letter-spacing:-.04em}
 .page-sub{color:#9aa4b2}
 .card{border-radius:24px;padding:22px}
+.card,.daily-pin,.day-section{content-visibility:auto;contain-intrinsic-size:360px}
 .stat-card{border-radius:22px;padding:18px;min-height:116px}
 .stat-label{letter-spacing:.08em;color:#98a2b3}
 .stat-value{font-size:clamp(30px,4vw,42px);letter-spacing:-.05em}
@@ -237,9 +235,8 @@ tr:hover td{background:rgba(255,255,255,.05)}
     top:0;
     z-index:50;
     padding:calc(12px + env(safe-area-inset-top)) 16px 12px;
-    background:rgba(8,10,16,.82);
+    background:rgba(8,10,16,.96);
     border-bottom:1px solid rgba(255,255,255,.08);
-    backdrop-filter:blur(24px) saturate(160%);
   }
   .mobile-brand{min-width:0}
   .mobile-brand-title{font-size:18px;font-weight:850;letter-spacing:-.04em}
@@ -294,9 +291,8 @@ tr:hover td{background:rgba(255,255,255,.05)}
     padding:8px;
     border:1px solid rgba(255,255,255,.10);
     border-radius:28px;
-    background:rgba(15,18,26,.84);
-    box-shadow:0 18px 50px rgba(0,0,0,.45);
-    backdrop-filter:blur(24px) saturate(170%);
+    background:rgba(15,18,26,.96);
+    box-shadow:0 10px 28px rgba(0,0,0,.34);
   }
   .mobile-tab{
     border:0;
@@ -316,6 +312,10 @@ tr:hover td{background:rgba(255,255,255,.05)}
   }
   .mobile-tab span{font-size:16px;line-height:1}
   .mobile-tab.active{background:rgba(255,255,255,.11);color:#fff}
+  .dot{animation:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
 }
 </style>
 </head>
@@ -751,12 +751,37 @@ function localDateKey(date = new Date()) {
   return `${y}-${m}-${d}`;
 }
 
+let dashboardLoaded = false;
+let lastRenderedPage = 'dashboard';
+let daywiseRenderedKey = '';
+let productsRenderedKey = '';
+let pinsRenderedKey = '';
+
+function dataVersion() {
+  return `${dashboardSource}|${products.length}|${postedLog.length}`;
+}
+
+function isPageActive(page) {
+  return document.getElementById('page-' + page)?.classList.contains('active');
+}
+
+function scheduleIdle(fn) {
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(fn, {timeout: 900});
+  } else {
+    setTimeout(fn, 80);
+  }
+}
+
 async function loadDataFiles() {
   setActionStatus('Loading dashboard CSV files...');
-  let fallbackPinsCount = 0;
-  const pinCsv = await fetchTextIfExists('data/pinterest_pins.csv');
-  if (pinCsv) fallbackPinsCount = parseCSV(pinCsv).length;
-  const productCsv = await fetchTextIfExists('data/products.csv');
+  const [pinCsv, productCsv, generatedStats, generatedLog] = await Promise.all([
+    fetchTextIfExists('data/pinterest_pins.csv'),
+    fetchTextIfExists('data/products.csv'),
+    fetchJsonIfExists('data/daily_stats.json'),
+    fetchJsonIfExists('data/posted_log.json'),
+  ]);
+  const fallbackPinsCount = pinCsv ? parseCSV(pinCsv).length : 0;
   if (productCsv) {
     products = parseCSV(productCsv).map(normalizePinRow).filter(p => p.pin_title || p.title || p.asin);
     dashboardSource = 'data/products.csv';
@@ -765,12 +790,10 @@ async function loadDataFiles() {
     dashboardSource = 'data/pinterest_pins.csv';
   }
 
-  const generatedStats = await fetchJsonIfExists('data/daily_stats.json');
   if (generatedStats && typeof generatedStats === 'object') {
     statsData = generatedStats;
   }
 
-  const generatedLog = await fetchJsonIfExists('data/posted_log.json');
   if (Array.isArray(generatedLog)) {
     postedLog = generatedLog;
   }
@@ -779,11 +802,15 @@ async function loadDataFiles() {
   store.set('pinbot_source', dashboardSource);
   store.set('pinbot_stats', statsData);
   store.set('pinbot_log', postedLog);
+  dashboardLoaded = true;
+  productsRenderedKey = '';
+  pinsRenderedKey = '';
+  daywiseRenderedKey = '';
   refreshAll();
-  if (document.getElementById('page-daywise').classList.contains('active')) generateDaywise(false);
+  if (document.getElementById('page-daywise').classList.contains('active')) scheduleIdle(() => generateDaywise(false));
   const fallbackNote = fallbackPinsCount ? ` Manual fallback CSV has ${fallbackPinsCount} prepared pins.` : '';
   setActionStatus(`Loaded ${products.length} pins from ${dashboardSource}.${fallbackNote}`);
-  showToast(`Loaded ${products.length} pins`);
+  if (lastRenderedPage !== 'dashboard') showToast(`Loaded ${products.length} pins`);
 }
 
 function importPinsCSV(event) {
@@ -795,6 +822,9 @@ function importPinsCSV(event) {
     dashboardSource = file.name;
     store.set('pinbot_products', products);
     store.set('pinbot_source', dashboardSource);
+    productsRenderedKey = '';
+    pinsRenderedKey = '';
+    daywiseRenderedKey = '';
     refreshAll();
     generateDaywise();
     setActionStatus(`Imported ${products.length} pins from ${file.name}.`);
@@ -815,10 +845,11 @@ function nav(page) {
     if (n.textContent.trim().startsWith(labels[page]?.charAt(0) || '?') &&
         n.textContent.includes(labels[page]?.split(' ')[0] || '')) n.classList.add('active');
   });
-  if (page==='products') renderProducts();
-  if (page==='daywise')  generateDaywise();
-  if (page==='pins')     renderPins();
-  if (page==='logs')     renderLogs();
+  lastRenderedPage = page;
+  if (page==='products') scheduleIdle(renderProducts);
+  if (page==='daywise')  scheduleIdle(() => generateDaywise());
+  if (page==='pins')     scheduleIdle(renderPins);
+  if (page==='logs')     scheduleIdle(renderLogs);
   if (page==='dashboard') refreshAll();
 }
 
@@ -837,7 +868,8 @@ function updateDate() {
     d.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) +
     ' — ' + d.toLocaleTimeString('en-IN');
 }
-setInterval(updateDate, 1000); updateDate();
+updateDate();
+setInterval(updateDate, 60000);
 
 // ── Refresh Dashboard ────────────────────────────────────────
 function refreshAll() {
@@ -915,7 +947,7 @@ function renderModules(states={}) {
       <span>${m.name}</span><span class="tag ${cls}">${s}</span></div>`;
   }).join('');
 }
-renderModules();
+scheduleIdle(renderModules);
 
 // ── Pipeline simulation ──────────────────────────────────────
 const PIPELINE_LOGS = {
@@ -1035,6 +1067,9 @@ function renderProducts() {
   const tbody = document.getElementById('products-body');
   const q = document.getElementById('prod-search')?.value?.toLowerCase()||'';
   const affF = document.getElementById('prod-aff-filter')?.value||'';
+  const renderKey = `${dataVersion()}|${q}|${affF}`;
+  if (productsRenderedKey === renderKey) return;
+  productsRenderedKey = renderKey;
   let filtered = products.filter(p=>{
     const matchQ = !q || String(p.asin||'').toLowerCase().includes(q) || String(p.title||p.pin_title||'').toLowerCase().includes(q);
     const matchA = !affF || (affF==='yes'?p.has_affiliate:!p.has_affiliate);
@@ -1164,6 +1199,12 @@ function generateDaywise(showFeedback=true) {
   const container = document.getElementById('daywise-container');
   const maxPerDay = 30;
   const usable = products.filter(p => p.pin_title || p.title || p.asin);
+  const renderKey = `${dataVersion()}|${usable.length}`;
+  if (daywiseRenderedKey === renderKey) {
+    if (showFeedback) showToast('Board already current');
+    return;
+  }
+  daywiseRenderedKey = renderKey;
   const days = Math.max(1, Math.ceil(usable.length / maxPerDay));
   let html = '';
 
@@ -1251,6 +1292,9 @@ function renderDailyPin(p) {
 // ── Posted Pins ──────────────────────────────────────────────
 function renderPins() {
   const q = document.getElementById('pin-search')?.value?.toLowerCase()||'';
+  const renderKey = `${dataVersion()}|${q}`;
+  if (pinsRenderedKey === renderKey) return;
+  pinsRenderedKey = renderKey;
   const filtered = postedLog.filter(p=>
     !q || p.asin.toLowerCase().includes(q) || p.title.toLowerCase().includes(q)
   ).reverse();
@@ -1368,12 +1412,20 @@ function copyText(text, successMessage='Copied!', showSuccess=true) {
 }
 
 // ── Init ─────────────────────────────────────────────────────
-refreshAll();
+const validPages = ['dashboard','pipeline','products','daywise','pins','settings','logs'];
 const initialPage = location.hash.replace('#','');
-loadDataFiles().then(() => {
-  if (['dashboard','pipeline','products','daywise','pins','settings','logs'].includes(initialPage)) nav(initialPage);
+if (validPages.includes(initialPage)) nav(initialPage);
+else refreshAll();
+
+scheduleIdle(() => {
+  loadDataFiles().then(() => {
+    if (validPages.includes(initialPage)) nav(initialPage);
+  });
 });
-setInterval(refreshAll, 30000);
+
+setInterval(() => {
+  if (document.visibilityState === 'visible' && isPageActive('dashboard')) refreshAll();
+}, 120000);
 </script>
 </body>
 </html>
