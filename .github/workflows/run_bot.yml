@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -60,9 +62,13 @@ jobs:
           test ! -f data/products.json || git add -f data/products.json
           test ! -f data/trends.json || git add -f data/trends.json
           test ! -d output/images || git add -f output/images/
-          git diff --cached --quiet || git commit -m "Run morning Pinterest publish path"
-          git pull --rebase
-          git push
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Run morning Pinterest publish path"
+            git pull --rebase origin main
+            git push origin main
+          fi
 
       - name: Upload logs as artifact
         if: always()
