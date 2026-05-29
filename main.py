@@ -24,7 +24,7 @@ logger = logging.getLogger("pinbot.main")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from modules.trend_engine    import load_trends, fetch_trends
-from modules.product_fetcher import fetch_products, fetch_products_from_urls, load_products
+from modules.product_fetcher import fetch_products, fetch_products_from_urls, load_products, refresh_cached_products
 from modules.image_generator import generate_pin_image
 from modules.caption_writer  import generate_caption
 from modules.pin_poster      import post_batch, pinterest_config_status
@@ -96,7 +96,19 @@ def run_pipeline(dry_run: bool = False, amazon_urls: list[str] | None = None,
     # ── M2: Products ─────────────────────────────────────────
     logger.info("── M2: Products ──")
     try:
-        products = fetch_products_from_urls(amazon_urls) if amazon_urls else (fetch_products(keywords) or load_products())
+        if amazon_urls:
+            products = fetch_products_from_urls(amazon_urls)
+        else:
+            products = fetch_products(keywords)
+            if not products:
+                cached_products = load_products()
+                if cached_products and scheduled_run:
+                    products = refresh_cached_products(
+                        cached_products,
+                        reason="Amazon returned no fresh products on scheduled run",
+                    )
+                else:
+                    products = cached_products
         if not products:
             logger.error("No products — aborting"); return
         logger.info(f"  {len(products)} trend-ranked products ready | CSV saved")

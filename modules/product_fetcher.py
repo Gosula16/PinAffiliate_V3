@@ -9,6 +9,7 @@ from config import (AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_PARTNER_TAG, AM
                     MAX_PRODUCTS_PER_KW, DAILY_PRODUCT_COUNT, ASIN_REPOST_DAYS,
                     GADGET_KEYWORDS)
 from modules.pinterest_bulk_csv import save_pinterest_bulk_csv
+from modules.pinterest_upload_csv import save_pinterest_upload_csv
 
 logger = logging.getLogger("pinbot.products")
 
@@ -226,6 +227,7 @@ def fetch_products_from_urls(urls: list[str]) -> list[dict]:
         json.dump({"fetched_at": datetime.now().isoformat(), "products": products}, f, indent=2, ensure_ascii=False)
     _save_csv(products)
     save_pinterest_bulk_csv(products)
+    save_pinterest_upload_csv(products)
     return products
 
 
@@ -339,6 +341,22 @@ def fetch_products(keywords=None):
         if len(all_products) >= DAILY_PRODUCT_COUNT:
             break
 
+    if not all_products:
+        logger.warning("No fresh products found; keeping the last good product feed")
+        return []
+
+    if len(all_products) < DAILY_PRODUCT_COUNT:
+        cached = load_products_csv()
+        seen_asins = {product.get("asin") for product in all_products}
+        for product in cached:
+            if product.get("asin") in seen_asins:
+                continue
+            all_products.append(product)
+            seen_asins.add(product.get("asin"))
+            if len(all_products) >= DAILY_PRODUCT_COUNT:
+                break
+        logger.info(f"Filled product queue to {len(all_products)} using cached products")
+
     # Save JSON
     with open(PRODUCTS_FILE, "w", encoding="utf-8") as f:
         json.dump({"fetched_at": datetime.now().isoformat(), "products": all_products}, f, indent=2, ensure_ascii=False)
@@ -346,6 +364,7 @@ def fetch_products(keywords=None):
     # Save CSV — all fields
     _save_csv(all_products)
     save_pinterest_bulk_csv(all_products)
+    save_pinterest_upload_csv(all_products)
     logger.info(f"Saved {len(all_products)} trend-ranked products | CSV + JSON written")
     return all_products
 
@@ -364,7 +383,54 @@ def _save_csv(products):
     logger.info(f"CSV: {PRODUCTS_CSV}")
 
 
+def _coerce_csv_value(value: str):
+    value = value or ""
+    if value.lower() in {"true", "false"}:
+        return value.lower() == "true"
+    number = re.sub(r"[^0-9.]", "", value)
+    if number and re.fullmatch(r"\d+(\.\d+)?", number):
+        try:
+            return float(number) if "." in number else int(number)
+        except ValueError:
+            return value
+    return value
+
+
+def load_products_csv():
+    if not os.path.exists(PRODUCTS_CSV):
+        return []
+    with open(PRODUCTS_CSV, newline="", encoding="utf-8") as f:
+        return [
+            {key: _coerce_csv_value(value) for key, value in row.items()}
+            for row in csv.DictReader(f)
+        ]
+
+
 def load_products():
-    if not os.path.exists(PRODUCTS_FILE): return []
-    with open(PRODUCTS_FILE, encoding="utf-8") as f:
-        return json.load(f).get("products", [])
+    if os.path.exists(PRODUCTS_FILE):
+        with open(PRODUCTS_FILE, encoding="utf-8") as f:
+            products = json.load(f).get("products", [])
+            if products:
+                return products
+    return load_products_csv()
+
+
+def refresh_cached_products(products: list[dict], reason: str = "cached fallback") -> list[dict]:
+    if not products:
+        return []
+    now = datetime.now().isoformat()
+    refreshed = []
+    for product in products:
+        item = dict(product)
+        item["fetched_at"] = now
+        item["queue_date"] = now[:10]
+        item["source"] = item.get("source") or "cached"
+        item["fallback_reason"] = reason
+        refreshed.append(item)
+    with open(PRODUCTS_FILE, "w", encoding="utf-8") as f:
+        json.dump({"fetched_at": now, "products": refreshed}, f, indent=2, ensure_ascii=False)
+    _save_csv(refreshed)
+    save_pinterest_bulk_csv(refreshed)
+    save_pinterest_upload_csv(refreshed)
+    logger.info(f"Refreshed {len(refreshed)} cached products for today's queue")
+    return refreshed
