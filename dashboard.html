@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PinAffiliateBot — Dashboard</title>
+<title>PinAffiliate — Dashboard</title>
 <style>
 :root{
   --bg:#0b0d12;--surface:#13161f;--s2:#1a1e2a;--s3:#222736;
@@ -322,7 +322,7 @@ tr:hover td{background:rgba(255,255,255,.05)}
 <body>
 <header class="mobile-topbar">
   <div class="mobile-brand">
-    <div class="mobile-brand-title">PinAffiliateBot</div>
+    <div class="mobile-brand-title">PinAffiliate</div>
     <div class="mobile-brand-sub">Morning publish dashboard</div>
   </div>
   <button class="mobile-sync" type="button" onclick="loadDataFiles()">Sync</button>
@@ -332,7 +332,7 @@ tr:hover td{background:rgba(255,255,255,.05)}
 <!-- SIDEBAR -->
 <aside class="sidebar">
   <div class="logo">
-    <div class="logo-mark">PinAffiliateBot</div>
+    <div class="logo-mark">PinAffiliate</div>
     <div class="logo-sub">Gadgets Automation</div>
   </div>
   <div class="nav-section">
@@ -352,7 +352,7 @@ tr:hover td{background:rgba(255,255,255,.05)}
     <div class="nav-item" onclick="nav('logs')"><span class="nav-icon">📋</span>Logs</div>
   </div>
   <div class="sidebar-footer">
-    <div class="bot-status"><div class="dot off" id="bot-dot"></div><span id="bot-status-txt">Bot idle</span></div>
+    <div class="bot-status"><div class="dot off" id="bot-dot"></div><span id="bot-status-txt">Idle</span></div>
   </div>
 </aside>
 
@@ -428,7 +428,7 @@ tr:hover td{background:rgba(255,255,255,.05)}
   </div>
   <div class="card">
     <div class="card-title">Live Output</div>
-    <div class="terminal" id="pipeline-log"><div class="log-info">[PinAffiliateBot] Ready — click an action above</div></div>
+    <div class="terminal" id="pipeline-log"><div class="log-info">[PinAffiliate] Ready — click an action above</div></div>
   </div>
 </div>
 
@@ -544,7 +544,7 @@ tr:hover td{background:rgba(255,255,255,.05)}
   <div class="card">
     <div class="card-title">Telegram (Optional)</div>
     <div class="form-row">
-      <div class="form-group"><label>Bot Token</label><input type="password" id="s-tg-token" placeholder="1234567890:AAF..."></div>
+      <div class="form-group"><label>Telegram Token</label><input type="password" id="s-tg-token" placeholder="1234567890:AAF..."></div>
       <div class="form-group"><label>Chat ID (number)</label><input type="text" id="s-tg-chat" placeholder="123456789"></div>
     </div>
   </div>
@@ -952,7 +952,7 @@ scheduleIdle(renderModules);
 // ── Pipeline simulation ──────────────────────────────────────
 const PIPELINE_LOGS = {
   dry: [
-    ['info','PinAffiliateBot starting | mode=dry-run'],
+    ['info','PinAffiliate starting | mode=dry-run'],
     ['info','M1: Loading trends — gadgets focus'],
     ['ok','  12 gadget keywords loaded'],
     ['info','M2: Fetching gadget products from Amazon.in'],
@@ -973,7 +973,7 @@ const PIPELINE_LOGS = {
     ['ok','Pipeline complete! 6 pins ready.'],
   ],
   full: [
-    ['info','PinAffiliateBot starting | mode=full'],
+    ['info','PinAffiliate starting | mode=full'],
     ['info','M1: Loading gadget trends...'],
     ['ok','  15 gadget keywords ready'],
     ['info','M2: Fetching products — electronics category'],
@@ -1024,7 +1024,7 @@ function runPipeline(mode) {
     if (i >= msgs.length) {
       clearInterval(iv);
       document.getElementById('bot-dot').className = 'dot off';
-      document.getElementById('bot-status-txt').textContent = 'Bot idle';
+      document.getElementById('bot-status-txt').textContent = 'Idle';
       renderModules({m1:'done',m2:'done',m3:'done',m4:'done',m5:mode==='full'?'done':'idle',m6:'idle'});
       if (mode==='full') {
         // Add fake posted pins
@@ -1117,7 +1117,7 @@ function downloadCSV() {
       return `"${String(v).replace(/"/g,'""')}"`;
     }).join(','));
   });
-  saveCsvFile(rows.join('\n'), `PinAffiliateBot_Products_${localDateKey()}.csv`);
+  saveCsvFile(rows.join('\n'), `PinAffiliate_Products_${localDateKey()}.csv`);
 }
 
 function downloadPinterestCSV() {
@@ -1138,7 +1138,7 @@ function downloadPinterestCSV() {
     };
     rows.push(fields.map(f => `"${String(row[f] ?? '').slice(0, f === 'Description' ? 500 : f === 'Title' ? 100 : 1000).replace(/"/g,'""')}"`).join(','));
   });
-  saveCsvFile(rows.join('\n'), `PinAffiliateBot_Pinterest_Upload_${localDateKey()}.csv`);
+  saveCsvFile(rows.join('\n'), `PinAffiliate_Pinterest_Upload_${localDateKey()}.csv`);
 }
 
 function saveCsvFile(csvText, filename) {
@@ -1190,7 +1190,7 @@ function downloadPinterestCSV() {
   const blob = new Blob([rows.join('\n')], {type:'text/csv'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `PinAffiliateBot_Pinterest_Pins_${new Date().toISOString().split('T')[0]}.csv`;
+  a.download = `PinAffiliate_Pinterest_Pins_${new Date().toISOString().split('T')[0]}.csv`;
   a.click();
 }
 
@@ -1318,7 +1318,7 @@ function filterPins() { renderPins(); }
 // ── Settings / .env ──────────────────────────────────────────
 function generateEnv() {
   const lines = [
-    '# PinAffiliateBot .env — Generated from Dashboard',
+    '# PinAffiliate .env — Generated from Dashboard',
     `AMAZON_ACCESS_KEY=${document.getElementById('s-amz-key').value||''}`,
     `AMAZON_SECRET_KEY=${document.getElementById('s-amz-secret').value||''}`,
     `AMAZON_PARTNER_TAG=${document.getElementById('s-amz-tag').value||'newdro04-21'}`,
@@ -1341,7 +1341,7 @@ function copyEnv() {
 
 // ── Logs ─────────────────────────────────────────────────────
 const SAMPLE_LOGS = [
-  '[07:30:01] [pinbot.main] INFO — PinAffiliateBot starting | gadgets mode',
+  '[07:30:01] [pinbot.main] INFO — PinAffiliate starting | gadgets mode',
   '[07:30:03] [pinbot.trends] INFO — 12 gadget keywords loaded',
   '[07:30:05] [pinbot.products] INFO — Fetching: wireless earbuds',
   '[07:30:07] [pinbot.products] INFO — Fetching: power bank',
