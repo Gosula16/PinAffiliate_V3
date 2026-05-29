@@ -1,6 +1,7 @@
 """M5 — Pin Poster: Posts pins to Pinterest via API v5 with human-like delays."""
 
-import json, logging, os, random, time, requests
+import base64
+import json, logging, mimetypes, os, random, time, requests
 from datetime import datetime
 from config import (PINTEREST_TOKEN, PINTEREST_BOARDS, POSTED_LOG,
                     MIN_DELAY_SEC, MAX_DELAY_SEC, DATA_DIR)
@@ -25,33 +26,21 @@ def _headers():
     }
 
 
-def _upload_image(image_path: str) -> str | None:
-    """Upload image to Pinterest and return media_id."""
+def _image_media_source(image_path: str) -> dict | None:
+    """Return an image_base64 media source for a generated local image."""
     try:
-        # Step 1: Register upload
-        r = requests.post(
-            f"{PINTEREST_API}/media",
-            headers=_headers(),
-            json={"media_type": "image"},
-            timeout=30,
-        )
-        r.raise_for_status()
-        data       = r.json()
-        upload_url = data["upload_url"]
-        media_id   = data["media_id"]
-        upload_params = data.get("upload_parameters", {})
-
-        # Step 2: Upload file
         with open(image_path, "rb") as f:
-            files   = {"file": ("pin.jpg", f, "image/jpeg")}
-            payload = {k: v for k, v in upload_params.items()}
-            upload_r = requests.post(upload_url, data=payload, files=files, timeout=60)
-            upload_r.raise_for_status()
-
-        logger.info(f"Image uploaded, media_id={media_id}")
-        return media_id
+            encoded = base64.b64encode(f.read()).decode("ascii")
+        content_type = mimetypes.guess_type(image_path)[0] or "image/jpeg"
+        if content_type not in {"image/jpeg", "image/png"}:
+            content_type = "image/jpeg"
+        return {
+            "source_type": "image_base64",
+            "content_type": content_type,
+            "data": encoded,
+        }
     except Exception as e:
-        logger.error(f"Image upload failed: {e}")
+        logger.error(f"Image encoding failed: {e}")
         return None
 
 
@@ -80,9 +69,8 @@ def post_pin(product: dict, image_path: str, caption: dict) -> dict | None:
         logger.error("No board ID configured")
         return None
 
-    # Upload image
-    media_id = _upload_image(image_path)
-    if not media_id:
+    media_source = _image_media_source(image_path)
+    if not media_source:
         return None
 
     # Build description with hashtags
@@ -95,10 +83,7 @@ def post_pin(product: dict, image_path: str, caption: dict) -> dict | None:
         "description":  description,
         "link":         product.get("pin_link") or product.get("affiliate_link") or product.get("manual_link", ""),
         "alt_text":     product.get("pin_alt_text") or product.get("title", "")[:500],
-        "media_source": {
-            "source_type": "media_id",
-            "media_id":    media_id,
-        },
+        "media_source": media_source,
     }
 
     try:

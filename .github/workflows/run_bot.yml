@@ -8,6 +8,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   morning-publish:
     runs-on: ubuntu-latest
@@ -48,12 +51,14 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/products.csv data/pinterest_bulk_editor.csv data/daily_stats.json
-          test ! -f data/pinterest_pins.csv || git add data/pinterest_pins.csv
-          test ! -f data/posted_log.json || git add data/posted_log.json
+          git add -f data/products.csv data/pinterest_bulk_editor.csv data/daily_stats.json
+          test ! -f data/pinterest_pins.csv || git add -f data/pinterest_pins.csv
+          test ! -f data/posted_log.json || git add -f data/posted_log.json
+          test ! -f data/products.json || git add -f data/products.json
           test ! -f data/trends.json || git add -f data/trends.json
           test ! -d output/images || git add -f output/images/
           git diff --cached --quiet || git commit -m "Run morning Pinterest publish path"
+          git pull --rebase
           git push
 
       - name: Upload logs as artifact
@@ -62,6 +67,7 @@ jobs:
         with:
           name: pinbot-logs-${{ github.run_number }}
           path: logs/
+          if-no-files-found: ignore
           retention-days: 7
 
       - name: Upload morning publish outputs
@@ -77,4 +83,5 @@ jobs:
             data/daily_stats.json
             data/posted_log.json
             output/images/
+          if-no-files-found: ignore
           retention-days: 7
