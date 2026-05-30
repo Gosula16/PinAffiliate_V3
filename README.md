@@ -1,4 +1,4 @@
-# PinAffiliate v1.0
+# PinAffiliate v3.0
 **Pinterest + Amazon Affiliate Automation — Complete System**
 
 ---
