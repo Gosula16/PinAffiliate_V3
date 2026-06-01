@@ -34,5 +34,13 @@
     "manual_csv": "/home/runner/work/PinAffiliate_V3/PinAffiliate_V3/data/pinterest_pins.csv",
     "fallback_reason": "Pinterest access token missing",
     "updated_at": "2026-05-31T11:57:55.547360"
+  },
+  "2026-06-01": {
+    "pins_posted": 0,
+    "errors": 0,
+    "pins_ready": 7,
+    "manual_csv": "/home/runner/work/PinAffiliate_V3/PinAffiliate_V3/data/pinterest_pins.csv",
+    "fallback_reason": "Pinterest access token missing",
+    "updated_at": "2026-06-01T12:40:37.919885"
   }
 }
