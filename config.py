@@ -24,6 +24,9 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 # Hugging Face optional intelligence checks
 HUGGINGFACE_API_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN", "")
 HF_TEXT_MODEL = os.getenv("HF_TEXT_MODEL", "cardiffnlp/twitter-roberta-base-sentiment-latest")
+HF_ZERO_SHOT_MODEL = os.getenv("HF_ZERO_SHOT_MODEL", "facebook/bart-large-mnli")
+HF_IMAGE_MODEL = os.getenv("HF_IMAGE_MODEL", "google/vit-base-patch16-224")
+HF_MAX_AI_CALLS = int(os.getenv("HF_MAX_AI_CALLS", 24))
 AI_MIN_PRODUCT_SCORE = int(os.getenv("AI_MIN_PRODUCT_SCORE", 55))
 
 # Telegram

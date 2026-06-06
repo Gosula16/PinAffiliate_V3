@@ -370,9 +370,11 @@ def _save_csv(products):
     fields = ["asin","title","price","currency","rating","reviews","keyword","category",
               "source","fetched_at","has_affiliate","product_url","affiliate_link","manual_link",
               "sitestripe_url","search_url","trend_label","seo_keyword","google_title","google_description",
-              "trend_score","product_score","ai_score","buyer_intent","quality_grade","recommendation",
-              "risk_flags","hf_signal","hf_signal_source","best_posting_window","seo_title_variants",
-              "caption_variants","pin_title","pin_description","pin_link","pin_board","pin_image_size",
+              "trend_score","product_score","ai_score","conversion_score","buyer_intent","quality_grade",
+              "recommendation","ai_action","risk_flags","hf_signal","hf_signal_source","hf_category",
+              "hf_category_score","hf_image_label","hf_image_score","duplicate_cluster",
+              "best_posting_window","seo_title_variants","caption_variants",
+              "pin_title","pin_description","pin_link","pin_board","pin_image_size",
               "pin_alt_text","image_url"]
     with open(PRODUCTS_CSV, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")

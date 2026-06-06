@@ -44,6 +44,10 @@ jobs:
           BOARD_DEALS:         ${{ secrets.BOARD_DEALS }}
           GEMINI_API_KEY:      ${{ secrets.GEMINI_API_KEY }}
           HUGGINGFACE_API_TOKEN: ${{ secrets.HUGGINGFACE_API_TOKEN }}
+          HF_TEXT_MODEL: cardiffnlp/twitter-roberta-base-sentiment-latest
+          HF_ZERO_SHOT_MODEL: facebook/bart-large-mnli
+          HF_IMAGE_MODEL: google/vit-base-patch16-224
+          HF_MAX_AI_CALLS: '24'
           TELEGRAM_TOKEN:      ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
           DAILY_PRODUCT_COUNT: '30'

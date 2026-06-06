@@ -403,8 +403,8 @@ tr:hover td{background:rgba(255,255,255,.05)}
   <div class="card">
     <div class="card-title">AI Intelligence Engine</div>
     <div class="format-grid">
-      <div style="background:var(--s2);border-radius:8px;padding:10px"><div class="copy-label">Selection Logic</div><div class="compact-note">Trend demand + price fit + rating proof + review volume + affiliate readiness + image quality.</div></div>
-      <div style="background:var(--s2);border-radius:8px;padding:10px"><div class="copy-label">Hugging Face</div><div class="compact-note" id="hf-status">Optional quality signal. Add HUGGINGFACE_API_TOKEN to enable.</div></div>
+      <div style="background:var(--s2);border-radius:8px;padding:10px"><div class="copy-label">Selection Logic</div><div class="compact-note">Trend demand + price fit + rating proof + review volume + affiliate readiness + image quality + conversion score.</div></div>
+      <div style="background:var(--s2);border-radius:8px;padding:10px"><div class="copy-label">Hugging Face</div><div class="compact-note" id="hf-status">Optional text, category and image model signals. Add HUGGINGFACE_API_TOKEN to enable.</div></div>
       <div style="background:var(--s2);border-radius:8px;padding:10px"><div class="copy-label">Next Action</div><div class="compact-note" id="ai-action">Load products to see post/review recommendations.</div></div>
     </div>
   </div>
@@ -747,12 +747,17 @@ function normalizePinRow(row) {
     google_description: row.google_description || row['Google Description'] || description,
     product_score: row.product_score || row['AI Score'] || '',
     ai_score: row.ai_score || row['AI Score'] || row.product_score || '',
+    conversion_score: row.conversion_score || row['Conversion Score'] || '',
     buyer_intent: row.buyer_intent || row['Buyer Intent'] || '',
     quality_grade: row.quality_grade || row['Quality Grade'] || '',
     recommendation: row.recommendation || row['Recommendation'] || 'post',
+    ai_action: row.ai_action || row['AI Action'] || '',
     risk_flags: row.risk_flags || row['Risk Flags'] || 'clean',
     best_posting_window: row.best_posting_window || row['Best Posting Window'] || '',
     hf_signal_source: row.hf_signal_source || '',
+    hf_category: row.hf_category || row['HF Category'] || '',
+    hf_image_label: row.hf_image_label || row['HF Image Label'] || '',
+    duplicate_cluster: row.duplicate_cluster || row['Duplicate Cluster'] || '',
     seo_title_variants: row.seo_title_variants || '',
     caption_variants: row.caption_variants || '',
     image_url: image,
@@ -934,7 +939,7 @@ function refreshAll() {
   const avgScore = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0) / scores.length) : 0;
   const highIntent = products.filter(p => String(p.buyer_intent || '').toLowerCase() === 'high').length;
   const postNow = products.filter(p => String(p.recommendation || 'post').toLowerCase() === 'post').length;
-  const hfEnabled = products.some(p => p.hf_signal_source === 'huggingface');
+  const hfEnabled = products.some(p => p.hf_signal_source === 'huggingface' || (p.hf_category && p.hf_category !== 'heuristic') || (p.hf_image_label && p.hf_image_label !== 'heuristic'));
 
   document.getElementById('s-today').textContent = ts.pins_posted;
   document.getElementById('s-total').textContent = postedLog.length;
@@ -952,7 +957,7 @@ function refreshAll() {
   const dwSource = document.getElementById('dw-source');
   if (dwSource) dwSource.textContent = dashboardSource.split(/[\\/]/).pop().slice(0, 18);
   const hfStatus = document.getElementById('hf-status');
-  if (hfStatus) hfStatus.textContent = hfEnabled ? 'Enabled: Hugging Face signal is included in AI score.' : 'Using deterministic scoring. Add HUGGINGFACE_API_TOKEN for model signal.';
+  if (hfStatus) hfStatus.textContent = hfEnabled ? 'Enabled: Hugging Face text/category/image signals are included in AI score.' : 'Using deterministic scoring. Add HUGGINGFACE_API_TOKEN for model signal.';
   const aiAction = document.getElementById('ai-action');
   if (aiAction) aiAction.textContent = products.length ? `${postNow} products are above the AI post threshold. Average score ${avgScore}.` : 'Load products to see post/review recommendations.';
 
@@ -1164,7 +1169,8 @@ function downloadCSV() {
   const fields = ['asin','title','price','currency','rating','reviews','keyword',
     'has_affiliate','product_url','affiliate_link','manual_link','sitestripe_url',
     'trend_label','seo_keyword','google_title','google_description','product_score',
-    'ai_score','buyer_intent','quality_grade','recommendation','risk_flags','best_posting_window',
+    'ai_score','conversion_score','buyer_intent','quality_grade','recommendation','ai_action',
+    'risk_flags','hf_category','hf_image_label','duplicate_cluster','best_posting_window',
     'seo_title_variants','caption_variants',
     'pin_title','pin_description','pin_link','pin_board','board_suggested','image_url','fetched_at'];
   const rows = [fields.join(',')];
@@ -1326,7 +1332,8 @@ function renderDailyPin(p) {
           ${p.status ? `<span class="tag tag-gray">${esc(p.status)}</span>` : ''}
         </div>
         <div class="compact-note" style="margin-top:8px">ASIN: <span class="td-mono">${esc(p.asin || 'N/A')}</span></div>
-        <div class="compact-note">Grade ${esc(p.quality_grade || '-')} | ${esc(p.recommendation || 'post')} | ${esc(p.best_posting_window || 'any window')}</div>
+        <div class="compact-note">Grade ${esc(p.quality_grade || '-')} | ${esc(p.ai_action || p.recommendation || 'post')} | conversion ${esc(p.conversion_score || '-')} | ${esc(p.best_posting_window || 'any window')}</div>
+        ${p.hf_category ? `<div class="compact-note">HF: ${esc(p.hf_category)}${p.hf_image_label ? ` | image ${esc(p.hf_image_label)}` : ''}</div>` : ''}
         ${p.failure_reason ? `<div class="compact-note" style="color:var(--amber)">Fallback: ${esc(p.failure_reason)}</div>` : ''}
       </div>
     </div>
@@ -1338,6 +1345,8 @@ function renderDailyPin(p) {
     ${copyBlock('AI Caption Variants', captionVariants.join('\n\n') || description, true)}
     ${copyBlock('Search Keyword', p.seo_keyword || p.keyword || '')}
     ${copyBlock('AI Risk Flags', p.risk_flags || 'clean')}
+    ${copyBlock('AI Conversion Score', p.conversion_score || aiScore(p) || '')}
+    ${copyBlock('Hugging Face Signals', `Category: ${p.hf_category || 'heuristic'}\nImage: ${p.hf_image_label || 'heuristic'}\nCluster: ${p.duplicate_cluster || ''}`, true)}
     ${copyBlock('Destination URL', link)}
     ${copyBlock('Exact Amazon Product URL', p.product_url || p.manual_link || link)}
     ${copyBlock('Board', board)}
@@ -1392,6 +1401,9 @@ function generateEnv() {
     `GEMINI_API_KEY=${document.getElementById('s-gemini').value||''}`,
     `HUGGINGFACE_API_TOKEN=${document.getElementById('s-hf-token').value||''}`,
     'HF_TEXT_MODEL=cardiffnlp/twitter-roberta-base-sentiment-latest',
+    'HF_ZERO_SHOT_MODEL=facebook/bart-large-mnli',
+    'HF_IMAGE_MODEL=google/vit-base-patch16-224',
+    'HF_MAX_AI_CALLS=24',
     `AI_MIN_PRODUCT_SCORE=${document.getElementById('s-ai-min').value||'55'}`,
     `TELEGRAM_TOKEN=${document.getElementById('s-tg-token').value||''}`,
     `TELEGRAM_CHAT_ID=${document.getElementById('s-tg-chat').value||''}`,

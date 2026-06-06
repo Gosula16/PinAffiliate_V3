@@ -128,14 +128,24 @@ python main.py --summary    # Send Telegram daily summary
 ## AI Ranking Engine
 Each product now receives:
 - `ai_score`: 0-100 score for posting priority
+- `conversion_score`: buyer-intent weighted score for revenue potential
 - `buyer_intent`: high, medium, or low search intent
 - `quality_grade`: A, B, C, or D
-- `recommendation`: post or review
-- `risk_flags`: missing image, low rating, low review proof, manual link, high price
+- `recommendation` / `ai_action`: post, review or improve decision
+- `risk_flags`: missing image, low rating, low review proof, manual link, high price, HF low-value checks
+- `hf_category`: Hugging Face zero-shot category signal
+- `hf_image_label`: Hugging Face image-quality signal
+- `duplicate_cluster`: product similarity cluster to avoid repeating the same idea
 - `seo_title_variants` and `caption_variants`: copy-ready A/B test ideas
 - `best_posting_window`: suggested time window for the product category
 
-The score blends trend position, price fit, rating, review volume, affiliate readiness, image availability, and optional Hugging Face text quality signal.
+The score blends trend position, price fit, rating, review volume, affiliate readiness, image availability, conversion intent, and optional Hugging Face text/category/image quality signals.
+
+Optional Hugging Face models:
+- `HF_TEXT_MODEL`: sentiment/text quality signal
+- `HF_ZERO_SHOT_MODEL`: buyer/category/spam classification
+- `HF_IMAGE_MODEL`: product image quality signal
+- `HF_MAX_AI_CALLS`: cap remote AI calls per run so GitHub Actions stays fast
 
 ---
 

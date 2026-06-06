@@ -34,6 +34,8 @@ def _keywords(product: dict) -> str:
         product.get("trend_label") or "",
         product.get("buyer_intent") or "",
         product.get("quality_grade") or "",
+        product.get("hf_category") or "",
+        product.get("ai_action") or "",
         "amazon finds",
         "daily finds",
     ]
