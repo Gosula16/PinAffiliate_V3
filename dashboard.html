@@ -338,7 +338,6 @@ tr:hover td{background:rgba(255,255,255,.05)}
   <div class="nav-section">
     <div class="nav-label">Main</div>
     <div class="nav-item active" onclick="nav('dashboard')"><span class="nav-icon">◈</span>Dashboard</div>
-    <div class="nav-item" onclick="nav('pipeline')"><span class="nav-icon">⚡</span>Run Pipeline</div>
   </div>
   <div class="nav-section">
     <div class="nav-label">Content</div>
@@ -387,7 +386,7 @@ tr:hover td{background:rgba(255,255,255,.05)}
       <div style="font-size:13px;color:var(--muted)"><span id="p-done">0</span> / <span id="p-max">15</span> pins posted</div>
       <div class="prog-wrap"><div class="prog-bar" id="prog-bar" style="width:0%"></div></div>
       <div class="btn-row">
-        <button class="btn btn-primary" onclick="nav('pipeline')">⚡ Run Pipeline</button>
+        <button class="btn btn-primary" onclick="loadDataFiles()">↻ Sync Latest</button>
         <button class="btn btn-blue" onclick="nav('daywise')">📅 Day-wise View</button>
       </div>
     </div>
@@ -417,30 +416,6 @@ tr:hover td{background:rgba(255,255,255,.05)}
   </div>
 </div>
 
-<!-- ══ PIPELINE ══ -->
-<div class="page" id="page-pipeline">
-  <div class="page-hdr"><div><div class="page-title">Run Pipeline</div><div class="page-sub">Execute publishing modules manually</div></div></div>
-  <div class="two-col">
-    <div class="card">
-      <div class="card-title">Quick Actions</div>
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <button class="btn btn-outline" onclick="runPipeline('dry')">🧪 Dry Run — Generate Only</button>
-        <button class="btn btn-green" onclick="runPipeline('full')">▶ Run Full Pipeline Now</button>
-        <button class="btn btn-blue" onclick="runPipeline('products')">🛍 Fetch Gadgets Only</button>
-        <button class="btn btn-amber" onclick="runPipeline('csv')">📥 Download CSV</button>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-title">Module Status</div>
-      <div id="module-list" style="display:flex;flex-direction:column;gap:8px"></div>
-    </div>
-  </div>
-  <div class="card">
-    <div class="card-title">Live Output</div>
-    <div class="terminal" id="pipeline-log"><div class="log-info">[PinAffiliate] Ready — click an action above</div></div>
-  </div>
-</div>
-
 <!-- ══ PRODUCTS ══ -->
 <div class="page" id="page-products">
   <div class="page-hdr">
@@ -466,7 +441,7 @@ tr:hover td{background:rgba(255,255,255,.05)}
           <th>AI</th><th>Intent</th><th>Affiliate Link</th><th>Open Product</th><th>Pin Ready</th>
         </tr></thead>
         <tbody id="products-body">
-          <tr><td colspan="9" style="color:var(--muted);text-align:center;padding:20px">Run pipeline to fetch gadgets</td></tr>
+          <tr><td colspan="9" style="color:var(--muted);text-align:center;padding:20px">Sync latest GitHub Actions output to load products</td></tr>
         </tbody>
       </table>
     </div>
@@ -648,17 +623,10 @@ const SAMPLE_PRODUCTS = [
     board_suggested:"Creator Gadgets India", fetched_at: new Date().toISOString() },
 ];
 
-let products = store.get('publisher_products') || [];
-let postedLog = store.get('publisher_log') || [];
-let statsData = store.get('publisher_stats') || {};
-let dashboardSource = store.get('publisher_source') || 'no CSV loaded';
-
-if (dashboardSource === 'sample data' || products.some(p => String(p.asin || '').includes('XYZ'))) {
-  products = [];
-  dashboardSource = 'no CSV loaded';
-  store.set('publisher_products', products);
-  store.set('publisher_source', dashboardSource);
-}
+let products = [];
+let postedLog = [];
+let statsData = {};
+let dashboardSource = 'loading live data';
 
 function esc(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => ({
@@ -775,7 +743,7 @@ function normalizePinRow(row) {
     pin_alt_text: row['Alt Text'] || row.pin_alt_text || row.title || title,
     status: row.Status || 'ready',
     failure_reason: row['Failure Reason'] || '',
-    fetched_at: row['Created At'] || row.fetched_at || new Date().toISOString(),
+    fetched_at: row.fetched_at || row['Fetched At'] || row['Created At'] || new Date().toISOString(),
   };
 }
 
@@ -853,10 +821,10 @@ async function loadDataFiles() {
     postedLog = generatedLog;
   }
 
-  store.set('publisher_products', products);
-  store.set('publisher_source', dashboardSource);
-  store.set('publisher_stats', statsData);
-  store.set('publisher_log', postedLog);
+  localStorage.removeItem('publisher_products');
+  localStorage.removeItem('publisher_source');
+  localStorage.removeItem('publisher_stats');
+  localStorage.removeItem('publisher_log');
   dashboardLoaded = true;
   productsRenderedKey = '';
   pinsRenderedKey = '';
@@ -875,8 +843,6 @@ function importPinsCSV(event) {
   reader.onload = () => {
     products = parseCSV(String(reader.result)).map(normalizePinRow).filter(p => p.pin_title || p.title || p.asin);
     dashboardSource = file.name;
-    store.set('publisher_products', products);
-    store.set('publisher_source', dashboardSource);
     productsRenderedKey = '';
     pinsRenderedKey = '';
     daywiseRenderedKey = '';
@@ -895,7 +861,7 @@ function nav(page) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.querySelectorAll('.mobile-tab').forEach(n => n.classList.toggle('active', n.dataset.page === page));
   document.getElementById('page-' + page).classList.add('active');
-  const labels = {dashboard:'Dashboard',pipeline:'Pipeline',products:'Products',daywise:'Day-wise',pins:'Posted',settings:'Settings',logs:'Logs'};
+  const labels = {dashboard:'Dashboard',products:'Products',daywise:'Day-wise',pins:'Posted',settings:'Settings',logs:'Logs'};
   document.querySelectorAll('.nav-item').forEach(n => {
     if (n.textContent.trim().startsWith(labels[page]?.charAt(0) || '?') &&
         n.textContent.includes(labels[page]?.split(' ')[0] || '')) n.classList.add('active');
@@ -983,7 +949,7 @@ function refreshAll() {
     return;
   }
   if (!recent.length) {
-    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">No activity yet — run pipeline</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">No Pinterest API posts yet. Manual fallback CSV is updated by GitHub Actions.</td></tr>`;
   } else {
     tbody.innerHTML = recent.map(p=>`<tr>
       <td class="td-mono" style="color:var(--muted)">${p.posted_at?.split('T')[1]?.slice(0,8)||'—'}</td>
@@ -1258,6 +1224,18 @@ function downloadPinterestCSV() {
 }
 
 // ── Day-wise Pins ────────────────────────────────────────────
+function latestGeneratedDate() {
+  const productDates = products
+    .map(p => new Date(p.fetched_at || p.created_at || p['Created At'] || ''))
+    .filter(d => !Number.isNaN(d.getTime()));
+  const statDates = Object.values(statsData || {})
+    .map(s => new Date(s.updated_at || ''))
+    .filter(d => !Number.isNaN(d.getTime()));
+  const dates = productDates.concat(statDates);
+  if (!dates.length) return new Date();
+  return new Date(Math.max(...dates.map(d => d.getTime())));
+}
+
 function generateDaywise(showFeedback=true) {
   const container = document.getElementById('daywise-container');
   const maxPerDay = 30;
@@ -1275,16 +1253,18 @@ function generateDaywise(showFeedback=true) {
   document.getElementById('dw-days').textContent = usable.length ? days : 0;
   document.getElementById('dw-source').textContent = dashboardSource.split(/[\\/]/).pop().slice(0, 18);
 
+  const batchDate = latestGeneratedDate();
   for (let d=0; d<days; d++) {
-    const date = new Date();
+    const date = new Date(batchDate);
     date.setDate(date.getDate() + d);
     const dateStr = date.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
     const dayProds = usable.slice(d*maxPerDay, (d+1)*maxPerDay);
     if (!dayProds.length) continue;
+    const badge = d === 0 ? 'Latest batch' : `Batch +${d}`;
 
     html += `<div class="day-section">
       <div class="day-header">
-        <span class="day-badge">Day ${d+1}</span>
+        <span class="day-badge">${badge}</span>
         <span style="font-size:14px;font-weight:600">${esc(dateStr)}</span>
         <span class="day-pins">${dayProds.length} pins scheduled</span>
       </div>
@@ -1294,7 +1274,7 @@ function generateDaywise(showFeedback=true) {
     </div>`;
   }
   container.innerHTML = html || `<div class="card compact-note">
-    No real Amazon products loaded yet. Import the GitHub Actions <strong>publisher-csv</strong> artifact, or run the publisher to create <strong>data/pinterest_pins.csv</strong>. Fake demo links are hidden so you do not copy invalid Amazon URLs.
+    No live Amazon products loaded yet. Use <strong>Sync Latest</strong> or download the latest GitHub Actions artifact if the deployment is still warming up.
   </div>`;
   setActionStatus(`Board refreshed: ${usable.length} pins across ${usable.length ? days : 0} day(s).`);
   if (showFeedback) showToast('Board refreshed');
@@ -1491,7 +1471,7 @@ function copyText(text, successMessage='Copied!', showSuccess=true) {
 }
 
 // ── Init ─────────────────────────────────────────────────────
-const validPages = ['dashboard','pipeline','products','daywise','pins','settings','logs'];
+const validPages = ['dashboard','products','daywise','pins','settings','logs'];
 const initialPage = location.hash.replace('#','');
 if (validPages.includes(initialPage)) nav(initialPage);
 else refreshAll();
